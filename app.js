@@ -416,108 +416,98 @@
         alert('解析結果がありません');
         return;
       }
-      // Ensure jsPDF
+      // Ensure jsPDF and html2canvas
       const { jsPDF } = window.jspdf || {};
       if(!jsPDF){
         alert('jsPDFライブラリが読み込まれていません');
         return;
       }
-
-      // Capture plot as PNG
-      const plotPng = await Plotly.toImage(plotDiv, {format:'png', width:1200, height:600});
-
-      const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
-      
-      // Add Japanese font support
-      if(typeof callAddFont !== 'undefined') {
-        callAddFont();
-      }
-      doc.setFont('ipaexg', 'normal');
-      
-      const margin = 10;
-      const pageW = 210, pageH = 297;
-      let y = margin;
-
-      // Title and timestamp
-      doc.setFontSize(16);
-      doc.text('耐力壁性能評価レポート', pageW/2, y, {align:'center'});
-      y += 8;
-      doc.setFontSize(8);
-      const ts = new Date().toISOString().replace('T',' ').substring(0,19);
-      doc.text('生成日時: '+ts, pageW/2, y, {align:'center'});
-      y += 10;
-
-      // Upper section: Graph (full width)
-      const imgW = pageW - 2*margin; // 190mm
-      const imgH = imgW * 600/1200; // preserve aspect (95mm)
-      doc.addImage(plotPng, 'PNG', margin, y, imgW, imgH);
-      y += imgH + 8;
-
-      // Lower section: Tables side by side
-      doc.setFontSize(10);
-      const colWidth = (pageW - 3*margin) / 2; // Two columns
-      const leftX = margin;
-      const rightX = margin + colWidth + margin;
-      
-      // Left column: Input parameters
-      let yLeft = y;
-      doc.setFontSize(11);
-      doc.setFont('ipaexg', 'normal');
-      doc.text('入力パラメータ', leftX, yLeft);
-      doc.setFont('ipaexg', 'normal');
-      yLeft += 6;
-      
-      const params = [
-        ['壁長さ L (m)', wall_length_m.value],
-        ['特定変形角 1/'+specific_deformation.value+' (rad)', (1/parseFloat(specific_deformation.value)).toExponential(3)],
-        ['最大終局変位 1/'+max_ultimate_deformation.value+' (rad)', (1/parseFloat(max_ultimate_deformation.value)).toExponential(3)],
-        ['C0', c0_factor.value],
-        ['α', alpha_factor.value]
-      ];
-      
-      doc.setFontSize(9);
-      for(const [k,v] of params){
-        doc.text(k, leftX, yLeft);
-        doc.text(String(v), leftX + colWidth - 5, yLeft, {align:'right'});
-        yLeft += 5;
+      if(typeof html2canvas === 'undefined'){
+        alert('html2canvasライブラリが読み込まれていません');
+        return;
       }
 
-      // Right column: Calculation results
-      let yRight = y;
-      doc.setFontSize(11);
-      doc.setFont('ipaexg', 'normal');
-      doc.text('計算結果', rightX, yRight);
-      doc.setFont('ipaexg', 'normal');
-      yRight += 6;
-      
+      // Create temporary container for PDF content
+      const container = document.createElement('div');
+      container.style.cssText = 'position:absolute; left:-9999px; top:0; width:800px; background:white; padding:20px; font-family:sans-serif;';
+      document.body.appendChild(container);
+
+      // Build HTML content
       const r = analysisResults;
-      const results = [
-        ['Pmax (kN)', r.Pmax?.toFixed(3)],
-        ['Py (kN)', r.Py?.toFixed(3)],
-        ['Pu (kN)', r.Pu?.toFixed(3)],
-        ['δv (rad)', r.delta_v?.toExponential(3)],
-        ['δu (rad)', r.delta_u?.toExponential(3)],
-        ['μ', r.mu?.toFixed(2)],
-        ['Ds', r.mu && r.mu>0 ? (1/Math.sqrt(2*r.mu-1)).toFixed(3):'-'],
-        ['P0(a)', r.p0_a?.toFixed(3)],
-        ['P0(b)', r.p0_b?.toFixed(3)],
-        ['P0(c)', r.p0_c?.toFixed(3)],
-        ['P0(d)', r.p0_d?.toFixed(3)],
-        ['P0', r.P0?.toFixed(3)],
-        ['Pa (kN)', r.Pa?.toFixed(3)],
-        ['壁倍率', r.magnification_rounded?.toFixed(1)]
-      ];
-      
-      doc.setFontSize(9);
-      for(const [k,v] of results){
-        doc.text(k, rightX, yRight);
-        doc.text(String(v ?? '-'), rightX + colWidth - 5, yRight, {align:'right'});
-        yRight += 5;
-      }
+      container.innerHTML = `
+        <div style="text-align:center; margin-bottom:15px;">
+          <h1 style="font-size:24px; margin:10px 0;">耐力壁性能評価レポート</h1>
+          <p style="font-size:12px; color:#666; margin:5px 0;">生成日時: ${new Date().toISOString().replace('T',' ').substring(0,19)}</p>
+        </div>
+        <div id="pdf-plot" style="width:100%; height:400px; margin-bottom:20px;"></div>
+        <div style="display:flex; gap:20px;">
+          <div style="flex:1;">
+            <h3 style="font-size:16px; margin:10px 0; border-bottom:2px solid #333; padding-bottom:5px;">入力パラメータ</h3>
+            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+              <tr><td style="padding:4px 0;">壁長さ L (m)</td><td style="text-align:right; padding:4px 0;">${wall_length_m.value}</td></tr>
+              <tr><td style="padding:4px 0;">特定変形角 1/${specific_deformation.value} (rad)</td><td style="text-align:right; padding:4px 0;">${(1/parseFloat(specific_deformation.value)).toExponential(3)}</td></tr>
+              <tr><td style="padding:4px 0;">最大終局変位 1/${max_ultimate_deformation.value} (rad)</td><td style="text-align:right; padding:4px 0;">${(1/parseFloat(max_ultimate_deformation.value)).toExponential(3)}</td></tr>
+              <tr><td style="padding:4px 0;">C0</td><td style="text-align:right; padding:4px 0;">${c0_factor.value}</td></tr>
+              <tr><td style="padding:4px 0;">α</td><td style="text-align:right; padding:4px 0;">${alpha_factor.value}</td></tr>
+            </table>
+          </div>
+          <div style="flex:1;">
+            <h3 style="font-size:16px; margin:10px 0; border-bottom:2px solid #333; padding-bottom:5px;">計算結果</h3>
+            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+              <tr><td style="padding:4px 0;">Pmax (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pmax?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">Py (kN)</td><td style="text-align:right; padding:4px 0;">${r.Py?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">Pu (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pu?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">δv (rad)</td><td style="text-align:right; padding:4px 0;">${r.delta_v?.toExponential(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">δu (rad)</td><td style="text-align:right; padding:4px 0;">${r.delta_u?.toExponential(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">μ</td><td style="text-align:right; padding:4px 0;">${r.mu?.toFixed(2) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">Ds</td><td style="text-align:right; padding:4px 0;">${r.mu && r.mu>0 ? (1/Math.sqrt(2*r.mu-1)).toFixed(3) : '-'}</td></tr>
+              <tr><td style="padding:4px 0;">P0(a)</td><td style="text-align:right; padding:4px 0;">${r.p0_a?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">P0(b)</td><td style="text-align:right; padding:4px 0;">${r.p0_b?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">P0(c)</td><td style="text-align:right; padding:4px 0;">${r.p0_c?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">P0(d)</td><td style="text-align:right; padding:4px 0;">${r.p0_d?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">P0</td><td style="text-align:right; padding:4px 0;">${r.P0?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">Pa (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pa?.toFixed(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0; font-weight:bold;">壁倍率</td><td style="text-align:right; padding:4px 0; font-weight:bold;">${r.magnification_rounded?.toFixed(1) ?? '-'}</td></tr>
+            </table>
+          </div>
+        </div>
+        <div style="text-align:center; font-size:10px; color:#666; margin-top:20px;">© Arkhitek / Generated by 耐力壁性能評価プログラム</div>
+      `;
 
-      // Footer
-      doc.setFontSize(7);
-      doc.text('© Arkhitek / Generated by 耐力壁性能評価プログラム', pageW/2, pageH - 5, {align:'center'});
+      // Render Plotly graph to temporary container
+      const pdfPlotDiv = container.querySelector('#pdf-plot');
+      await Plotly.newPlot(pdfPlotDiv, plotDiv.data, {
+        ...plotDiv.layout,
+        width: 760,
+        height: 400,
+        margin: {l:60, r:20, t:40, b:60}
+      }, {displayModeBar: false});
+
+      // Convert to image using html2canvas
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+
+      // Remove temporary container
+      document.body.removeChild(container);
+
+      // Create PDF
+      const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+      const imgData = canvas.toDataURL('image/png');
+      const pageW = 210;
+      const pageH = 297;
+      const imgW = pageW;
+      const imgH = (canvas.height * pageW) / canvas.width;
+      
+      // Scale to fit page if necessary
+      if(imgH > pageH - 20){
+        const scale = (pageH - 20) / imgH;
+        doc.addImage(imgData, 'PNG', 0, 10, imgW * scale, imgH * scale);
+      } else {
+        doc.addImage(imgData, 'PNG', 0, 10, imgW, imgH);
+      }
 
       doc.save('hyouka_report.pdf');
       appendLog('PDFレポートを生成しました');
