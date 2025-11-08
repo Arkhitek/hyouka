@@ -9,6 +9,7 @@
   let header = [];
   let envelopeData = null;
   let analysisResults = {};
+  let relayoutHandlerAttached = false; // Plotly autoscale対策のイベント重複防止
 
   // === Elements ===
   const gammaInput = document.getElementById('gammaInput');
@@ -173,6 +174,23 @@
   }
 
   autoLoadSample();
+
+  // 包絡線ベースの表示範囲を計算（10%マージン、ゼロ幅回避込み）
+  function computeEnvelopeRanges(env){
+    if(!env || env.length === 0){
+      return { xRange: [-1, 1], yRange: [-1, 1] };
+    }
+    const xs = env.map(pt => pt.gamma);
+    const ys = env.map(pt => pt.Load);
+    let minX = Math.min(...xs), maxX = Math.max(...xs);
+    let minY = Math.min(...ys), maxY = Math.max(...ys);
+    // ゼロ幅のときは小さな幅を与える
+    if(minX === maxX){ const pad = Math.max(1e-6, Math.abs(minX)*0.1 || 1e-6); minX -= pad; maxX += pad; }
+    if(minY === maxY){ const pad = Math.max(1e-3, Math.abs(minY)*0.1 || 1e-3); minY -= pad; maxY += pad; }
+    const mx = (maxX - minX) * 0.1;
+    const my = (maxY - minY) * 0.1;
+    return { xRange: [minX - mx, maxX + mx], yRange: [minY - my, maxY + my] };
+  }
 
   // === Direct Input Handling ===
   function handleDirectInput(){
@@ -622,17 +640,7 @@
   const envelopeSign = (envelope_side && envelope_side.value === 'negative') ? -1 : 1;
 
   // Calculate data range for auto-fitting based on envelope (not raw data)
-  const envGammas = envelope.map(pt => pt.gamma);
-    const envLoads = envelope.map(pt => pt.Load);
-    
-    const minGamma = Math.min(...envGammas);
-    const maxGamma = Math.max(...envGammas);
-    const minLoad = Math.min(...envLoads);
-    const maxLoad = Math.max(...envLoads);
-    
-    // Add 10% margin for better visibility
-    const gammaMargin = (maxGamma - minGamma) * 0.1;
-    const loadMargin = (maxLoad - minLoad) * 0.1;
+  const ranges = computeEnvelopeRanges(envelope);
 
     // Original raw data (all points) - showing positive and negative loads
     const trace_rawdata = {
@@ -717,18 +725,43 @@
   title: '荷重-変形関係と評価直線',
       xaxis: {
         title: '見掛けのせん断変形角 γ (rad)',
-        range: [minGamma - gammaMargin, maxGamma + gammaMargin]
+        range: ranges.xRange
       },
       yaxis: {
         title: '荷重 P (kN)',
-        range: [minLoad - loadMargin, maxLoad + loadMargin]
+        range: ranges.yRange
       },
       hovermode: 'closest',
       showlegend: true,
       height: 600
     };
 
-  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout);
+  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout)
+    .then(function(){
+      // Autoscale（モードバーやダブルクリック）が発火した場合も包絡線範囲へ調整
+      if(!relayoutHandlerAttached){
+        plotDiv.on('plotly_relayout', function(e){
+          try{
+            const keys = e ? Object.keys(e) : [];
+            const auto = keys.some(k => /autorange$/.test(k) && e[k] === true);
+            if(auto && envelopeData && envelopeData.length){
+              const r = computeEnvelopeRanges(envelopeData);
+              Plotly.relayout(plotDiv, {'xaxis.range': r.xRange, 'yaxis.range': r.yRange});
+            }
+          }catch(err){ console.warn('autoscale再調整エラー', err); }
+        });
+        // ダブルクリックのリセットでも同様にフィット
+        plotDiv.on('plotly_doubleclick', function(){
+          try{
+            if(envelopeData && envelopeData.length){
+              const r = computeEnvelopeRanges(envelopeData);
+              Plotly.relayout(plotDiv, {'xaxis.range': r.xRange, 'yaxis.range': r.yRange});
+            }
+          }catch(err){ console.warn('doubleclick再調整エラー', err); }
+        });
+        relayoutHandlerAttached = true;
+      }
+    });
   }
 
   function makeLine(lineObj, gamma_range, name, color, sign = 1){
