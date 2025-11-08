@@ -1091,7 +1091,10 @@
     let isDragging = false;
     let dragPointIndex = -1;
     let selectedPointIndex = -1; // Del キー用の選択状態
-    window._selectedEnvelopePoint = -1; // グローバルで選択状態を保持
+    // window._selectedEnvelopePoint の初期化をコメントアウト（既存の選択状態を保持）
+    if(typeof window._selectedEnvelopePoint === 'undefined'){
+      window._selectedEnvelopePoint = -1; // 初回のみ初期化
+    }
     
     // 既存クリックハンドラを解除
     if(_plotClickHandler && typeof plotDiv.removeListener === 'function'){
