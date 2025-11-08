@@ -140,20 +140,21 @@
 
   <script src="app.js"></script>
   <script>
-    // ロゴの404防止: PNGが存在する場合のみ読み込む。なければ既存SVGを使用
+    // 設定: 必要に応じてPNGロゴとExcelテンプレートの使用を切替（デフォルトはどちらもfalse）
+    window.APP_CONFIG = Object.assign({
+      usePngLogo: false,
+      useExcelTemplate: false
+    }, window.APP_CONFIG || {});
+
+    // ロゴ: デフォルトはSVG。usePngLogo=trueの時のみPNGを表示（404防止）
     (function(){
-      var logoContainer = document.getElementById('brandLogo');
-      if(!logoContainer) return;
-      function useSvg(){
-        logoContainer.innerHTML = '<img src="./logo_arkhitek.svg" class="header-logo" alt="Arkhitek ロゴ" />';
+      var el = document.getElementById('brandLogo');
+      if(!el) return;
+      if(window.APP_CONFIG.usePngLogo){
+        el.innerHTML = '<img src="./arkhitek_logo.png" class="header-logo" alt="Arkhitek ロゴ" />';
+      } else {
+        el.innerHTML = '<img src="./logo_arkhitek.svg" class="header-logo" alt="Arkhitek ロゴ" />';
       }
-      fetch('./arkhitek_logo.png', {method:'HEAD'}).then(function(resp){
-        if(resp.ok){
-          logoContainer.innerHTML = '<img src="./arkhitek_logo.png" class="header-logo" alt="Arkhitek ロゴ" />';
-        } else {
-          useSvg();
-        }
-      }).catch(function(){ useSvg(); });
     })();
   </script>
 </body>

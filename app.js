@@ -724,7 +724,7 @@
     const layout = {
   title: '荷重-変形関係と評価直線',
       xaxis: {
-        title: '見掛けのせん断変形角 γ (rad)',
+        title: '変形角 γ (rad)',
         range: ranges.xRange
       },
       yaxis: {
@@ -837,17 +837,21 @@
     }
     try{
       let wb = null;
-      // ネイティブチャート対応: template.xlsx が存在する場合はそれを読み込み
-      try{
-        const resp = await fetch('template.xlsx', {cache:'no-cache'});
-        if(resp.ok){
-          const buf = await resp.arrayBuffer();
-          wb = new ExcelJS.Workbook();
-          await wb.xlsx.load(buf);
-          appendLog('情報: template.xlsx を使用してExcelを生成');
+      // ネイティブチャート対応: 明示的に有効化された場合のみ template.xlsx を読み込み
+      if(window.APP_CONFIG && window.APP_CONFIG.useExcelTemplate){
+        try{
+          const resp = await fetch('template.xlsx', {cache:'no-cache'});
+          if(resp.ok){
+            const buf = await resp.arrayBuffer();
+            wb = new ExcelJS.Workbook();
+            await wb.xlsx.load(buf);
+            appendLog('情報: template.xlsx を使用してExcelを生成');
+          }else{
+            appendLog('情報: template.xlsx が見つかりません (resp='+resp.status+')');
+          }
+        }catch(e){
+          appendLog('情報: template.xlsx 読込不可 (' + (e && e.message ? e.message : e) + ')');
         }
-      }catch(e){
-        appendLog('情報: template.xlsx 読込不可 (' + (e && e.message ? e.message : e) + ')');
       }
       if(!wb){
         wb = new ExcelJS.Workbook();
