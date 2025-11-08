@@ -749,24 +749,79 @@
     // Determine the sign of the envelope (positive or negative side)
     const envelopeSign = envelope[0] && envelope[0].Load < 0 ? -1 : 1;
 
-    // Find Pmax (Section III.1)
-    const Pmax = envelope.reduce((max, pt) => (Math.abs(pt.Load) > Math.abs(max.Load) ? pt : max), envelope[0]);
-    results.Pmax = Math.abs(Pmax.Load);
-    results.Pmax_gamma = Math.abs(Pmax.gamma);
+    // Find provisional global Pmax (used for yielding & Pu derivation; may lie after δu)
+    const Pmax_global_pt = envelope.reduce((max, pt) => (Math.abs(pt.Load) > Math.abs(max.Load) ? pt : max), envelope[0]);
+    const Pmax_global = Math.abs(Pmax_global_pt.Load);
 
-    // Calculate Py using Line Method (Section III.1)
-    const Py_result = calculatePy_LineMethod(envelope, results.Pmax);
+    // Calculate Py using Line Method (Section III.1) with provisional global Pmax
+    const Py_result = calculatePy_LineMethod(envelope, Pmax_global);
     results.Py = Py_result.Py;
     results.Py_gamma = Py_result.Py_gamma;
     results.lineI = Py_result.lineI;
     results.lineII = Py_result.lineII;
     results.lineIII = Py_result.lineIII;
 
-    // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
-    const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, results.Pmax, delta_u_max);
-    Object.assign(results, Pu_result);
+  // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
+  const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max);
+  Object.assign(results, Pu_result);
 
-    // Calculate P0 (Section V.1)
+    // Override Pmax with value BEFORE ultimate displacement δu per user requirement
+    const delta_u = results.delta_u; // from Pu_result
+    if(isFinite(delta_u)){
+      const prePts = envelope.filter(pt => Math.abs(pt.gamma) <= delta_u + 1e-12); // tolerance
+      if(prePts.length){
+        const Pmax_pre_pt = prePts.reduce((max, pt) => (Math.abs(pt.Load) > Math.abs(max.Load) ? pt : max), prePts[0]);
+        results.Pmax_global = Pmax_global; // store original for reference
+        results.Pmax = Math.abs(Pmax_pre_pt.Load);
+        results.Pmax_gamma = Math.abs(Pmax_pre_pt.gamma);
+      }else{
+        // Fallback keep global
+        results.Pmax_global = Pmax_global;
+        results.Pmax = Pmax_global;
+        results.Pmax_gamma = Math.abs(Pmax_global_pt.gamma);
+      }
+    }else{
+      results.Pmax_global = Pmax_global;
+      results.Pmax = Pmax_global;
+      results.Pmax_gamma = Math.abs(Pmax_global_pt.gamma);
+    }
+
+    // === Second pass: Restrict Py (and dependent values) to pre-δu segment ===
+    try{
+      const du1 = results.delta_u;
+      if(isFinite(du1) && du1 > 0){
+        const envPre = envelope.filter(pt => Math.abs(pt.gamma) <= du1 + 1e-12);
+        if(envPre.length >= 3){
+          const pmaxPrePt = envPre.reduce((max, pt) => (Math.abs(pt.Load) > Math.abs(max.Load) ? pt : max), envPre[0]);
+          const pmaxPre = Math.abs(pmaxPrePt.Load);
+          // Recompute Py with pre-δu envelope
+          const Py_pre = calculatePy_LineMethod(envPre, pmaxPre);
+          results.Py = Py_pre.Py;
+          results.Py_gamma = Py_pre.Py_gamma;
+          results.lineI = Py_pre.lineI;
+          results.lineII = Py_pre.lineII;
+          results.lineIII = Py_pre.lineIII;
+
+          // Recompute Pu/μ/δv/δu on pre-δu envelope with updated Py
+          const Pu_pre = calculatePu_EnergyEquivalent(envPre, results.Py, pmaxPre, delta_u_max);
+          Object.assign(results, Pu_pre);
+
+          // Recompute Pmax with final δu restriction
+          const du2 = results.delta_u;
+          const envPre2 = envelope.filter(pt => Math.abs(pt.gamma) <= du2 + 1e-12);
+          if(envPre2.length){
+            const pmaxPrePt2 = envPre2.reduce((max, pt) => (Math.abs(pt.Load) > Math.abs(max.Load) ? pt : max), envPre2[0]);
+            results.Pmax_global = Pmax_global;
+            results.Pmax = Math.abs(pmaxPrePt2.Load);
+            results.Pmax_gamma = Math.abs(pmaxPrePt2.gamma);
+          }
+        }
+      }
+    }catch(e){
+      console.warn('Second-pass (pre-δu) Py/Pu 再計算に失敗:', e);
+    }
+
+    // Calculate P0 (Section V.1) using final results
     const P0_result = calculateP0(results, envelope, gamma_specific, c0);
     Object.assign(results, P0_result);
 
