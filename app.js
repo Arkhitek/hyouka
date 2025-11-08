@@ -683,6 +683,25 @@
         }
       };
       window.__PLOTLY_RELAYOUT_PATCHED__ = true;
+      // Plotly.Lib.warn のうち "Relayout fail" は情報ログに降格して抑制
+      try{
+        if(window.Plotly.Lib && typeof window.Plotly.Lib.warn === 'function' && !window.__PLOTLY_LIBWARN_PATCHED__){
+          const origWarn = window.Plotly.Lib.warn;
+          window.Plotly.Lib.warn = function patchedWarn(){
+            try{
+              const msg = arguments && arguments[0] ? String(arguments[0]) : '';
+              if(msg.indexOf('Relayout fail') !== -1){
+                // 2 つ目以降の引数（問題の updates など）を一応表示
+                console.info('[plotly.warn suppressed] Relayout fail:', arguments[1], arguments[2]);
+                return; // 抑制
+              }
+            }catch(_){/* noop */}
+            return origWarn.apply(this, arguments);
+          };
+          window.__PLOTLY_LIBWARN_PATCHED__ = true;
+          console.info('[patch.lib.warn] installed');
+        }
+      }catch(err){ console.warn('patch Plotly.Lib.warn failed', err); }
       // 追加: 内部 API Plots.relayout もパッチしてライブラリ内部経路をガード
       try{
         if(window.Plotly.Plots && typeof window.Plotly.Plots.relayout === 'function' && !window.__PLOTS_RELAYOUT_PATCHED__){
