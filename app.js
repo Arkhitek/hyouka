@@ -476,6 +476,21 @@
     return { xRange: [minX - mx, maxX + mx], yRange: [minY - my, maxY + my] };
   }
 
+  // 包絡線範囲へフィット（初期描画・Autoscaleボタン・ダブルクリックで共通使用）
+  function fitEnvelopeRanges(reason){
+    try{
+      if(!envelopeData || !envelopeData.length) return;
+      const r = computeEnvelopeRanges(envelopeData);
+      console.info('[Fit] 包絡線範囲へフィット:', reason || '');
+      Plotly.relayout(plotDiv, {
+        'xaxis.autorange': false,
+        'yaxis.autorange': false,
+        'xaxis.range': r.xRange,
+        'yaxis.range': r.yRange
+      });
+    }catch(err){ console.warn('fitEnvelopeRanges エラー', err); }
+  }
+
   // === Direct Input Handling ===
   function handleDirectInput(){
     const gammaText = gammaInput.value.trim();
@@ -1063,14 +1078,7 @@
             const keys = e ? Object.keys(e) : [];
             const triggeredAuto = keys.some(k => /autorange$/.test(k) && e[k] === true);
             if(triggeredAuto && envelopeData && envelopeData.length){
-              console.info('[Autoscale] 包絡線範囲へフィッティング');
-              const r = computeEnvelopeRanges(envelopeData);
-              Plotly.relayout(plotDiv, {
-                'xaxis.autorange': false,
-                'yaxis.autorange': false,
-                'xaxis.range': r.xRange,
-                'yaxis.range': r.yRange
-              });
+              fitEnvelopeRanges('Autoscaleボタン');
             }
           }catch(err){ console.warn('autoscale再調整エラー', err); }
         });
@@ -1083,14 +1091,7 @@
               return false;
             }
             if(envelopeData && envelopeData.length){
-              console.info('[ダブルクリック] 包絡線範囲へリセット');
-              const r = computeEnvelopeRanges(envelopeData);
-              Plotly.relayout(plotDiv, {
-                'xaxis.autorange': false,
-                'yaxis.autorange': false,
-                'xaxis.range': r.xRange,
-                'yaxis.range': r.yRange
-              });
+              fitEnvelopeRanges('ダブルクリック');
             }
           }catch(err){ console.warn('doubleclick再調整エラー', err); }
           return false; // 既存のデフォルト動作抑制
