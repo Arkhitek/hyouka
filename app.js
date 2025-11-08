@@ -648,6 +648,20 @@
     }
   }
 
+  // 軽量なグローバル抑止: 理由が undefined の未処理Promise拒否のみ握りつぶす（本番でも常時有効）
+  // Plotly 内部の一部経路で reject(undefined) が発生するため、実用上のノイズを抑える。
+  if(typeof window !== 'undefined' && window.addEventListener){
+    window.addEventListener('unhandledrejection', function(ev){
+      try{
+        if(!ev) return;
+        if(typeof ev.reason === 'undefined'){
+          // デバッグが必要な場合は ?debug=layout を使用（詳細パッチが有効化される）
+          ev.preventDefault();
+        }
+      }catch(_){/* noop */}
+    });
+  }
+
   // デバッグフラグ (?debug=layout または APP_CONFIG.debugLayout) が true のときのみ詳細パッチを適用
   (function patchGlobalRelayout(){
     try{
@@ -1702,7 +1716,7 @@
       }
     });
     
-    // マウスダウン: Shiftキー押下中かつ包絡線点上ならドラッグ開始
+    // マウスダウン: Ctrl+Shift 押下中かつ包絡線点上ならドラッグ開始
     let mousedownHandler = function(e){
       // Ctrl+Shift 同時押しでのみドラッグ開始（Mac の command 対応は ctrlKey 優先）
       const ctrlOrMeta = e.ctrlKey || e.metaKey;
@@ -1713,7 +1727,7 @@
       const yaxis = plotDiv._fullLayout.yaxis;
       if(!xaxis || !yaxis) return;
       
-      const bbox = plotDiv.getBoundingClientRect();
+      const bbox = (dragLayer || plotDiv).getBoundingClientRect();
       const clickX = e.clientX - bbox.left;
       const clickY = e.clientY - bbox.top;
       
@@ -1734,8 +1748,8 @@
         }
       });
       
-      // 30px以内なら包絡線点と判定（ヒット領域を少し広げる）
-      if(minDist < 30 && nearestIdx >= 0){
+  // 35px以内なら包絡線点と判定（ヒット領域を少し広げる）
+  if(minDist < 35 && nearestIdx >= 0){
         // Plotlyのデフォルトドラッグを無効化（先に実行）
         e.stopImmediatePropagation();
         e.preventDefault();
@@ -1767,7 +1781,7 @@
       const yaxis = plotDiv._fullLayout.yaxis;
       if(!xaxis || !yaxis) return;
       
-      const bbox = plotDiv.getBoundingClientRect();
+      const bbox = (dragLayer || plotDiv).getBoundingClientRect();
       const moveX = e.clientX - bbox.left;
       const moveY = e.clientY - bbox.top;
       
