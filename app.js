@@ -640,9 +640,10 @@
   const envelopeSign = (envelope_side && envelope_side.value === 'negative') ? -1 : 1;
 
   // Calculate data range for auto-fitting based on envelope (not raw data)
-  const ranges = computeEnvelopeRanges(envelope);
-
-    // Original raw data (all points) - showing positive and negative loads
+    const ranges = computeEnvelopeRanges(envelope);
+    
+    // 包絡線データを編集可能にするための状態管理
+    let editableEnvelope = envelope.map(pt => ({...pt}));    // Original raw data (all points) - showing positive and negative loads
     const trace_rawdata = {
       x: rawData.map(pt => pt.gamma), // rad
       y: rawData.map(pt => pt.Load), // Keep original sign
@@ -654,20 +655,21 @@
 
     // Envelope line - keep original sign
     const trace_env = {
-      x: envelope.map(pt => pt.gamma),
-      y: envelope.map(pt => pt.Load), // Keep original sign from filtered data
+      x: editableEnvelope.map(pt => pt.gamma),
+      y: editableEnvelope.map(pt => pt.Load), // Keep original sign from filtered data
       mode: 'lines',
       name: '包絡線',
       line: {color: 'blue', width: 2}
     };
 
-    // Envelope points (requested) - show the sampled points composing the envelope
+    // Envelope points (editable) - draggable markers
     const trace_env_points = {
-      x: envelope.map(pt => pt.gamma),
-      y: envelope.map(pt => pt.Load),
+      x: editableEnvelope.map(pt => pt.gamma),
+      y: editableEnvelope.map(pt => pt.Load),
       mode: 'markers',
-      name: '包絡線点',
-      marker: {color: 'blue', size: 6, symbol: 'circle', line: {color: 'white', width: 1}}
+      name: '包絡線点 (ドラッグ移動可)',
+      marker: {color: 'blue', size: 10, symbol: 'circle', line: {color: 'white', width: 2}},
+      hovertemplate: '<b>変形角:</b> %{x:.6f}<br><b>荷重:</b> %{y:.3f}<br><i>ドラッグで移動、Delキーで削除</i><extra></extra>'
     };
 
     // Line I, II, III (Py determination)
@@ -722,7 +724,7 @@
     };
 
     const layout = {
-  title: '荷重-変形関係と評価直線',
+  title: '荷重-変形関係と評価直線 (ダブルクリックで点追加)',
       xaxis: {
         title: '変形角 γ (rad)',
         range: ranges.xRange
@@ -733,11 +735,15 @@
       },
       hovermode: 'closest',
       showlegend: true,
-      height: 600
+      height: 600,
+      dragmode: 'pan'
     };
 
-  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout)
+  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, {editable: false})
     .then(function(){
+      // 包絡線点の編集機能を実装
+      setupEnvelopeEditing(editableEnvelope);
+      
       // Autoscale（モードバーやダブルクリック）が発火した場合も包絡線範囲へ調整
       if(!relayoutHandlerAttached){
         plotDiv.on('plotly_relayout', function(e){
@@ -762,6 +768,208 @@
         relayoutHandlerAttached = true;
       }
     });
+  }
+
+  // === 包絡線点の編集機能 ===
+  function setupEnvelopeEditing(editableEnvelope){
+    let isDragging = false;
+    let dragPointIndex = -1;
+    let selectedPointIndex = -1; // Del キー用の選択状態
+    
+    // 包絡線点のクリック・ダブルクリック処理
+    plotDiv.on('plotly_click', function(data){
+      if(!data.points || data.points.length === 0) return;
+      const pt = data.points[0];
+      
+      // 包絡線点トレース（trace 2）のクリック
+      if(pt.curveNumber === 2){
+        // シングルクリック：点を選択（Del用）
+        selectedPointIndex = pt.pointIndex;
+        console.info('包絡線点 ' + selectedPointIndex + ' を選択（Delキーで削除可能）');
+        return;
+      }
+      
+      // 他のトレースをクリック：選択解除
+      selectedPointIndex = -1;
+    });
+    
+    // ダブルクリックで新規点追加
+    plotDiv.on('plotly_doubleclick', function(){
+      // デフォルトのズームリセットを無効化して、代わりに点追加処理へ
+      return false; // prevent default zoom reset
+    });
+    
+    // ダブルクリック時に座標を取得して点追加
+    plotDiv.addEventListener('dblclick', function(e){
+      const bb = plotDiv.getBoundingClientRect();
+      const x = e.clientX - bb.left;
+      const y = e.clientY - bb.top;
+      
+      const xaxis = plotDiv._fullLayout.xaxis;
+      const yaxis = plotDiv._fullLayout.yaxis;
+      if(!xaxis || !yaxis) return;
+      
+      const xData = xaxis.p2c(x);
+      const yData = yaxis.p2c(y);
+      
+      addEnvelopePoint(xData, yData, editableEnvelope);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    
+    // Delキーで選択中の点を削除
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Delete' || e.key === 'Del'){
+        if(selectedPointIndex >= 0 && selectedPointIndex < editableEnvelope.length){
+          deleteEnvelopePoint(selectedPointIndex, editableEnvelope);
+          selectedPointIndex = -1;
+        }
+      }
+    });
+    
+    // マウスダウンで包絡線点をつかむ
+    plotDiv.addEventListener('mousedown', function(e){
+      const bb = plotDiv.getBoundingClientRect();
+      const x = e.clientX - bb.left;
+      const y = e.clientY - bb.top;
+      
+      // Plotly座標系に変換
+      const xaxis = plotDiv._fullLayout.xaxis;
+      const yaxis = plotDiv._fullLayout.yaxis;
+      if(!xaxis || !yaxis) return;
+      
+      const xData = xaxis.p2c(x);
+      const yData = yaxis.p2c(y);
+      
+      // 最も近い包絡線点を探す
+      let minDist = Infinity;
+      let closestIdx = -1;
+      editableEnvelope.forEach((pt, idx) => {
+        const dx = Math.abs(pt.gamma - xData);
+        const dy = Math.abs(pt.Load - yData);
+        // スクリーン座標での距離（近似）
+        const xPx = xaxis.c2p(pt.gamma);
+        const yPx = yaxis.c2p(pt.Load);
+        const dist = Math.sqrt(Math.pow(xPx - x, 2) + Math.pow(yPx - y, 2));
+        if(dist < 15 && dist < minDist){ // 15px以内
+          minDist = dist;
+          closestIdx = idx;
+        }
+      });
+      
+      if(closestIdx >= 0){
+        isDragging = true;
+        dragPointIndex = closestIdx;
+        plotDiv.style.cursor = 'grabbing';
+      }
+    });
+    
+    // マウス移動でドラッグ
+    plotDiv.addEventListener('mousemove', function(e){
+      if(!isDragging || dragPointIndex < 0) return;
+      
+      const bb = plotDiv.getBoundingClientRect();
+      const x = e.clientX - bb.left;
+      const y = e.clientY - bb.top;
+      
+      const xaxis = plotDiv._fullLayout.xaxis;
+      const yaxis = plotDiv._fullLayout.yaxis;
+      if(!xaxis || !yaxis) return;
+      
+      const xData = xaxis.p2c(x);
+      const yData = yaxis.p2c(y);
+      
+      // 包絡線点の位置を更新
+      editableEnvelope[dragPointIndex].gamma = xData;
+      editableEnvelope[dragPointIndex].Load = yData;
+      
+      // プロット更新（包絡線と包絡線点のみ）
+      updateEnvelopePlot(editableEnvelope);
+    });
+    
+    // マウスアップでドラッグ終了
+    plotDiv.addEventListener('mouseup', function(e){
+      if(isDragging){
+        isDragging = false;
+        dragPointIndex = -1;
+        plotDiv.style.cursor = 'default';
+        
+        // ドラッグ終了後に再計算
+        recalculateFromEnvelope(editableEnvelope);
+      }
+    });
+    
+    plotDiv.addEventListener('mouseleave', function(e){
+      if(isDragging){
+        isDragging = false;
+        dragPointIndex = -1;
+        plotDiv.style.cursor = 'default';
+      }
+    });
+  }
+  
+  function updateEnvelopePlot(editableEnvelope){
+    // 包絡線トレース（trace 1）と包絡線点トレース（trace 2）を更新
+    Plotly.restyle(plotDiv, {
+      x: [editableEnvelope.map(pt => pt.gamma)],
+      y: [editableEnvelope.map(pt => pt.Load)]
+    }, [1]); // trace 1: 包絡線
+    
+    Plotly.restyle(plotDiv, {
+      x: [editableEnvelope.map(pt => pt.gamma)],
+      y: [editableEnvelope.map(pt => pt.Load)]
+    }, [2]); // trace 2: 包絡線点
+  }
+  
+  function deleteEnvelopePoint(pointIndex, editableEnvelope){
+    if(editableEnvelope.length <= 2){
+      alert('包絡線には最低2点が必要です');
+      return;
+    }
+    editableEnvelope.splice(pointIndex, 1);
+    updateEnvelopePlot(editableEnvelope);
+    recalculateFromEnvelope(editableEnvelope);
+    appendLog('包絡線点を削除しました（残り' + editableEnvelope.length + '点）');
+  }
+  
+  function addEnvelopePoint(gamma, load, editableEnvelope){
+    // 新しい点を適切な位置に挿入（gamma順）
+    let insertIdx = editableEnvelope.findIndex(pt => pt.gamma > gamma);
+    if(insertIdx < 0) insertIdx = editableEnvelope.length;
+    
+    editableEnvelope.splice(insertIdx, 0, {
+      gamma: gamma,
+      Load: load,
+      gamma0: gamma // 簡易的に同値
+    });
+    
+    updateEnvelopePlot(editableEnvelope);
+    recalculateFromEnvelope(editableEnvelope);
+    appendLog('包絡線点を追加しました（γ=' + gamma.toFixed(6) + ', P=' + load.toFixed(3) + '）');
+  }
+  
+  function recalculateFromEnvelope(editableEnvelope){
+    try{
+      // 編集後の包絡線から特性値を再計算
+      envelopeData = editableEnvelope.map(pt => ({...pt}));
+      
+      const L = parseFloat(wall_length_m.value);
+      const alpha = parseFloat(alpha_factor.value);
+      const method = test_method.value;
+      
+      if(!isFinite(L) || !isFinite(alpha)) return;
+      
+      analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha);
+      renderResults(analysisResults);
+      
+      // 評価直線などを再描画
+      renderPlot(envelopeData, analysisResults);
+      
+      appendLog('包絡線編集に基づき特性値を再計算しました');
+    }catch(err){
+      console.error('再計算エラー:', err);
+      appendLog('再計算エラー: ' + (err && err.message ? err.message : err));
+    }
   }
 
   function makeLine(lineObj, gamma_range, name, color, sign = 1){
