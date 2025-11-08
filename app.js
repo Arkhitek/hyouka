@@ -429,9 +429,10 @@
       const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
       
       // Add Japanese font support
-      doc.addFileToVFS('IPAexG.ttf', window.IPAexG);
-      doc.addFont('IPAexG.ttf', 'IPAexG', 'normal');
-      doc.setFont('IPAexG');
+      if(typeof callAddFont !== 'undefined') {
+        callAddFont();
+      }
+      doc.setFont('ipaexg', 'normal');
       
       const margin = 10;
       const pageW = 210, pageH = 297;
@@ -461,9 +462,9 @@
       // Left column: Input parameters
       let yLeft = y;
       doc.setFontSize(11);
-      doc.setFont('IPAexG', 'bold');
+      doc.setFont('ipaexg', 'normal');
       doc.text('入力パラメータ', leftX, yLeft);
-      doc.setFont('IPAexG', 'normal');
+      doc.setFont('ipaexg', 'normal');
       yLeft += 6;
       
       const params = [
@@ -484,9 +485,9 @@
       // Right column: Calculation results
       let yRight = y;
       doc.setFontSize(11);
-      doc.setFont('IPAexG', 'bold');
+      doc.setFont('ipaexg', 'normal');
       doc.text('計算結果', rightX, yRight);
-      doc.setFont('IPAexG', 'normal');
+      doc.setFont('ipaexg', 'normal');
       yRight += 6;
       
       const r = analysisResults;
