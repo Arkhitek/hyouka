@@ -32,10 +32,7 @@
 <body>
     <header class="header" role="banner">
       <div class="header-inner">
-        <picture>
-          <source srcset="./arkhitek_logo.png" type="image/png" />
-          <img src="./logo_arkhitek.svg" class="header-logo" alt="Arkhitek ロゴ" />
-        </picture>
+        <div id="brandLogo" aria-label="Arkhitek ロゴ"></div>
       </div>
     </header>
   <h1>木造耐力壁性能評価プログラム</h1>
@@ -142,5 +139,22 @@
   </div>
 
   <script src="app.js"></script>
+  <script>
+    // ロゴの404防止: PNGが存在する場合のみ読み込む。なければ既存SVGを使用
+    (function(){
+      var logoContainer = document.getElementById('brandLogo');
+      if(!logoContainer) return;
+      function useSvg(){
+        logoContainer.innerHTML = '<img src="./logo_arkhitek.svg" class="header-logo" alt="Arkhitek ロゴ" />';
+      }
+      fetch('./arkhitek_logo.png', {method:'HEAD'}).then(function(resp){
+        if(resp.ok){
+          logoContainer.innerHTML = '<img src="./arkhitek_logo.png" class="header-logo" alt="Arkhitek ロゴ" />';
+        } else {
+          useSvg();
+        }
+      }).catch(function(){ useSvg(); });
+    })();
+  </script>
 </body>
 </html>
