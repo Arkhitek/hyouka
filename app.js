@@ -1222,6 +1222,7 @@
         autorange: false
       },
       hovermode: 'closest',
+      dragmode: 'pan', // デフォルトはパン操作
       showlegend: true,
       height: 600,
       annotations: [
@@ -1466,6 +1467,11 @@
     // マウスダウン: Shiftキー押下中かつ包絡線点上ならドラッグ開始
     let mousedownHandler = function(e){
       if(!e.shiftKey) return;
+      
+      // Plotlyのデフォルトドラッグを無効化
+      e.stopPropagation();
+      e.preventDefault();
+      
       // Plotlyのイベントから最寄りの点を取得
       const xaxis = plotDiv._fullLayout.xaxis;
       const yaxis = plotDiv._fullLayout.yaxis;
@@ -1499,8 +1505,9 @@
         shiftDragStartX = clickX;
         shiftDragStartY = clickY;
         plotDiv.style.cursor = 'move';
-        e.preventDefault();
-        e.stopPropagation();
+        
+        // Plotlyのドラッグモードを一時的に無効化
+        Plotly.relayout(plotDiv, {'dragmode': false});
         
         // ツールチップ表示
         if(pointTooltip){
@@ -1564,6 +1571,9 @@
         shiftDragging = false;
         shiftDragIndex = -1;
         plotDiv.style.cursor = 'default';
+        
+        // Plotlyのドラッグモードを復元
+        Plotly.relayout(plotDiv, {'dragmode': 'pan'});
       }
     };
     
