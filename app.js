@@ -20,8 +20,10 @@
   const processButton = document.getElementById('processButton');
   const downloadCsvButton = document.getElementById('downloadCsvButton');
   const downloadPngButton = document.getElementById('downloadPngButton');
+  const downloadExcelButton = document.getElementById('downloadExcelButton');
   const clearDataButton = document.getElementById('clearDataButton');
   const plotDiv = document.getElementById('plot');
+  const logOutput = document.getElementById('logOutput');
 
   // ローカル(file://)でのCORS制約回避用: 組込サンプルCSV（fetch失敗時のフォールバック）
   const BUILTIN_SAMPLE_CSV = `gamma,Load\n
@@ -111,6 +113,7 @@
   processButton.addEventListener('click', processData);
   downloadCsvButton.addEventListener('click', downloadCsv);
   downloadPngButton.addEventListener('click', downloadPng);
+  if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
   clearDataButton.addEventListener('click', clearInputData);
 
 
@@ -124,6 +127,7 @@
     downloadCsvButton.disabled = true;
     downloadPngButton.disabled = true;
     plotDiv.innerHTML = '';
+    if(logOutput) logOutput.textContent = '';
     // 結果表示リセット
     ['val_pmax','val_py','val_dy','val_K','val_pu','val_du','val_mu','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
       const el = document.getElementById(id); if(el) el.textContent='-';
@@ -143,6 +147,7 @@
     }
     if(pairs.length === 0){
       console.warn('CSVに有効なデータがありません。');
+      appendLog('警告: CSVに有効なデータがありません');
       return;
     }
     gammaInput.value = pairs.map(p=>p[0]).join('\n');
@@ -158,9 +163,11 @@
         // file:// でのCORS制約時は組込サンプルへフォールバック
         if(location && location.protocol === 'file:'){
           console.warn('file:// での自動読込を組込サンプルにフォールバックします。詳細:', err.message);
+          appendLog('情報: sample.csv 取得失敗 → 組込サンプルを使用 ('+ err.message +')');
           loadCsvText(BUILTIN_SAMPLE_CSV);
         } else {
           console.warn('sample.csv 自動読込失敗:', err.message);
+          appendLog('警告: sample.csv 自動読込失敗 ('+ err.message +')');
         }
       });
   }
@@ -232,6 +239,7 @@
       }
     } catch(err) {
       console.error('データ解析エラー:', err);
+      appendLog('データ解析エラー: ' + (err && err.stack ? err.stack : err.message));
     }
   }
 
@@ -267,9 +275,11 @@
 
       downloadCsvButton.disabled = false;
       downloadPngButton.disabled = false;
+  if(downloadExcelButton) downloadExcelButton.disabled = false;
     }catch(error){
       alert('計算エラーが発生しました: ' + error.message);
       console.error(error);
+      appendLog('計算エラー: ' + (error && error.stack ? error.stack : error.message));
     }
   }
 
@@ -302,8 +312,10 @@
 
       downloadCsvButton.disabled = false;
       downloadPngButton.disabled = false;
+  if(downloadExcelButton) downloadExcelButton.disabled = false;
     }catch(error){
       console.error('計算エラー:', error);
+      appendLog('計算エラー(自動解析): ' + (error && error.stack ? error.stack : error.message));
     }
   }
 
@@ -482,6 +494,7 @@
     const discriminant = Math.pow(K * delta_u, 2) - 2 * K * S;
     if(discriminant < 0){
       console.warn('Pu計算で判別式が負: discriminant =', discriminant);
+      appendLog('警告: Pu計算 判別式<0 のためPyにフォールバック (discriminant='+discriminant.toFixed(6)+')');
       // Fallback: use Py
       return {
         delta_y, K, delta_u, S,
@@ -782,5 +795,126 @@
 
   function downloadPng(){
     Plotly.downloadImage(plotDiv, {format:'png', width:1200, height:700, filename:'Graph'});
+  }
+
+  async function downloadExcel(){
+    if(!window.ExcelJS){
+      alert('ExcelJSライブラリが読み込まれていません');
+      return;
+    }
+    try{
+      let wb = null;
+      // ネイティブチャート対応: template.xlsx が存在する場合はそれを読み込み
+      try{
+        const resp = await fetch('template.xlsx', {cache:'no-cache'});
+        if(resp.ok){
+          const buf = await resp.arrayBuffer();
+          wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buf);
+          appendLog('情報: template.xlsx を使用してExcelを生成');
+        }
+      }catch(e){
+        appendLog('情報: template.xlsx 読込不可 (' + (e && e.message ? e.message : e) + ')');
+      }
+      if(!wb){
+        wb = new ExcelJS.Workbook();
+        wb.creator = 'hyouka-app';
+        wb.created = new Date();
+      }
+
+      // 1) 解析結果シート
+      let wsSummary = wb.getWorksheet('Summary');
+      if(!wsSummary) wsSummary = wb.addWorksheet('Summary');
+      const r = analysisResults;
+      wsSummary.addRow(['項目','値','単位']);
+      const rows = [
+        ['最大耐力 Pmax', r.Pmax, 'kN'],
+        ['降伏耐力 Py', r.Py, 'kN'],
+        ['降伏変位 δy', r.delta_y, 'rad'],
+        ['初期剛性 K', r.K, 'kN/rad'],
+        ['終局耐力 Pu', r.Pu, 'kN'],
+        ['終局変位 δu', r.delta_u, 'rad'],
+        ['塑性率 μ', r.mu, ''],
+        ['P0(a) 降伏耐力', r.p0_a, 'kN'],
+        ['P0(b) 靭性基準', r.p0_b, 'kN'],
+        ['P0(c) 最大耐力基準', r.p0_c, 'kN'],
+        ['P0(d) 特定変形時', r.p0_d, 'kN'],
+        ['短期基準せん断耐力 P0', r.P0, 'kN'],
+        ['短期許容せん断耐力 Pa', r.Pa, 'kN'],
+        ['壁倍率', r.magnification_rounded, '倍']
+      ];
+      rows.forEach(row => wsSummary.addRow(row));
+      wsSummary.columns.forEach(col => { col.width = 22; });
+      // 数値フォーマット適用
+      for(let i=2;i<=wsSummary.rowCount;i++){
+        const label = wsSummary.getCell(i,1).value;
+        const cell = wsSummary.getCell(i,2);
+        if(typeof cell.value !== 'number') continue;
+        if(/rad/.test(wsSummary.getCell(i,3).value)) cell.numFmt = '0.000000';
+        else if(label === '初期剛性 K') cell.numFmt = '#,##0.00';
+        else if(label === '壁倍率') cell.numFmt = '0.0';
+        else cell.numFmt = '#,##0.000';
+      }
+
+      // 2) 入力データシート
+      let wsInput = wb.getWorksheet('InputData');
+      if(!wsInput) wsInput = wb.addWorksheet('InputData');
+      // ヘッダ再設定と既存データクリア
+      wsInput.spliceRows(1, wsInput.rowCount, ['gamma','Load']);
+      rawData.forEach(pt => wsInput.addRow([pt.gamma, pt.Load]));
+      wsInput.columns.forEach(c=> c.width = 18);
+      for(let i=2;i<=wsInput.rowCount;i++){
+        const cg = wsInput.getCell(i,1); if(typeof cg.value==='number') cg.numFmt='0.000000';
+        const cp = wsInput.getCell(i,2); if(typeof cp.value==='number') cp.numFmt='0.000';
+      }
+
+      // 3) 包絡線シート
+      let wsEnv = wb.getWorksheet('Envelope');
+      if(!wsEnv) wsEnv = wb.addWorksheet('Envelope');
+      wsEnv.spliceRows(1, wsEnv.rowCount, ['gamma','Load']);
+      (envelopeData||[]).forEach(pt => wsEnv.addRow([pt.gamma, pt.Load]));
+      wsEnv.columns.forEach(c=> c.width = 18);
+      for(let i=2;i<=wsEnv.rowCount;i++){
+        const cg = wsEnv.getCell(i,1); if(typeof cg.value==='number') cg.numFmt='0.000000';
+        const cp = wsEnv.getCell(i,2); if(typeof cp.value==='number') cp.numFmt='0.000';
+      }
+
+      // 4) グラフシート (画像埋込み)
+      // Chartシート: テンプレートがあれば既存を活用。無ければ画像埋め込みの代替。
+      let wsChart = wb.getWorksheet('Chart');
+      if(!wsChart){
+        wsChart = wb.addWorksheet('Chart');
+        wsChart.getCell('A1').value = '荷重-変形関係グラフ';
+        wsChart.getRow(1).font = {bold:true};
+        const pngDataUrl = await Plotly.toImage(plotDiv, {format:'png', width:1200, height:700});
+        const base64 = pngDataUrl.replace(/^data:image\/png;base64,/, '');
+        const imageId = wb.addImage({base64, extension:'png'});
+        wsChart.addImage(imageId, { tl: {col:0, row:2}, ext: {width: 900, height: 520} });
+      }
+
+      // 仕上げ: 自動フィルタやスタイル軽微調整
+      wsSummary.getRow(1).font = {bold:true};
+      wsInput.getRow(1).font = {bold:true};
+      wsEnv.getRow(1).font = {bold:true};
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Results.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }catch(err){
+      console.error('Excel出力エラー:', err);
+      alert('Excelの生成に失敗しました。');
+      appendLog('Excel出力エラー: ' + (err && err.stack ? err.stack : err.message));
+    }
+  }
+
+  function appendLog(message){
+    if(!logOutput) return;
+    const time = new Date().toISOString();
+    logOutput.textContent += `[${time}] ${message}\n`;
   }
 })();
