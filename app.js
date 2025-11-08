@@ -735,6 +735,7 @@
       renderResults(analysisResults);
 
       if(downloadExcelButton) downloadExcelButton.disabled = false;
+  if(generatePdfButton) generatePdfButton.disabled = false;
       historyStack = [cloneEnvelope(envelopeData)];
       redoStack = [];
       updateHistoryButtons();
