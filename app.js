@@ -648,25 +648,18 @@
     }
   }
 
-  // グローバル: Plotly.relayout をモンキーパッチしてあらゆる呼び出しの不正値を抑止しスタックを収集
+  // デバッグフラグ (?debug=layout または APP_CONFIG.debugLayout) が true のときのみ詳細パッチを適用
   (function patchGlobalRelayout(){
     try{
       if(!window.Plotly) return;
       if(window.__PLOTLY_RELAYOUT_PATCHED__) return;
-      // バージョン判定 (>= 2.31.0 なら重いパッチはスキップ)
-      function parseVer(v){
-        const m = String(v||'').split('.').map(n=>parseInt(n,10)||0);
-        return {maj:m[0]||0, min:m[1]||0, pat:m[2]||0};
+      function isLayoutDebug(){
+        try{ const u=new URL(window.location.href); if(u.searchParams.get('debug')==='layout') return true; }catch(_){/*noop*/}
+        try{ if(window.APP_CONFIG && window.APP_CONFIG.debugLayout===true) return true; }catch(_){/*noop*/}
+        return false;
       }
-      function lt(a,b){
-        const A=parseVer(a), B=parseVer(b);
-        if(A.maj!==B.maj) return A.maj<B.maj;
-        if(A.min!==B.min) return A.min<B.min;
-        return A.pat<B.pat;
-      }
-      const ver = (window.Plotly && window.Plotly.version) ? window.Plotly.version : '0.0.0';
-  // 解析目的で常に heavy パッチ有効化（恒久対策前の診断ステージ）
-  const needHeavyPatch = true; // lt(ver, '2.31.0') を上書き
+      const DEBUG = isLayoutDebug();
+      if(!DEBUG){ return; } // 本番は何もしない
 
       const origRelayout = window.Plotly.relayout;
       if(typeof origRelayout !== 'function') return;
@@ -698,7 +691,7 @@
         }
       };
       window.__PLOTLY_RELAYOUT_PATCHED__ = true;
-      // Plotly.Lib.warn のうち "Relayout fail" は情報ログに降格して抑制
+      // Plotly.Lib.warn のうち "Relayout fail" を抑制（デバッグ時のみ）
       try{
         if(window.Plotly.Lib && typeof window.Plotly.Lib.warn === 'function' && !window.__PLOTLY_LIBWARN_PATCHED__){
           const origWarn = window.Plotly.Lib.warn;
@@ -718,7 +711,7 @@
         }
       }catch(err){ console.warn('patch Plotly.Lib.warn failed', err); }
 
-          // さらに保険として console.warn を薄くラップし、"Relayout fail" を info に降格
+          // さらに保険として console.warn を薄くラップし、"Relayout fail" を info に降格（デバッグのみ）
           try{
             if(!window.__CONSOLE_WARN_PATCHED__ && typeof console !== 'undefined' && typeof console.warn === 'function'){
               const _origConsoleWarn = console.warn.bind(console);
@@ -735,7 +728,7 @@
               window.__CONSOLE_WARN_PATCHED__ = true;
               console.info('[patch.console.warn] installed');
             }
-            // 同様に console.log/console.error でも出る可能性を抑止
+            // 同様に console.log/console.error でも出る可能性を抑止（デバッグのみ）
             if(!window.__CONSOLE_LOG_PATCHED__ && typeof console !== 'undefined' && typeof console.log === 'function'){
               const _origConsoleLog = console.log.bind(console);
               console.log = function(){
@@ -767,7 +760,7 @@
               console.info('[patch.console.error] installed');
             }
           }catch(err){ /* ignore */ }
-      // 追加: 内部 API Plots.relayout もパッチ（古いバージョンのみ）
+      // 追加: 内部 API Plots.relayout もパッチ（デバッグのみ）
       try{
         if(window.Plotly.Plots && typeof window.Plotly.Plots.relayout === 'function' && !window.__PLOTS_RELAYOUT_PATCHED__){
           const origPlotsRelayout = window.Plotly.Plots.relayout;
@@ -823,7 +816,7 @@
         }
       }catch(err){ console.warn('patch Plots.relayout failed', err); }
 
-      // 未処理拒否の既定ログを抑制（理由 undefined のみ）
+      // 未処理拒否の既定ログを抑制（理由 undefined のみ／デバッグ時のみ）
       window.addEventListener('unhandledrejection', function(ev){
         try{
           if(!ev) return;
