@@ -10,6 +10,9 @@
   let envelopeData = null;
   let analysisResults = {};
   let relayoutHandlerAttached = false; // Plotly autoscale対策のイベント重複防止
+  // イベントハンドラ参照（重複登録防止用）
+  let _plotClickHandler = null;
+  let _keydownHandler = null;
 
   // === Elements ===
   const gammaInput = document.getElementById('gammaInput');
@@ -83,6 +86,7 @@
     if(window._selectedEnvelopePoint < 0 || !envelopeData) return;
     const idx = window._selectedEnvelopePoint;
     const pt = envelopeData[idx];
+    console.debug('[openPointEditDialog] 開始 idx='+idx+' γ='+pt.gamma+' P='+pt.Load);
     editGammaInput.value = pt.gamma.toFixed(6);
     editLoadInput.value = pt.Load.toFixed(4);
     // ダイアログを初期位置へ（中央）
@@ -825,19 +829,19 @@
       line: {color: 'blue', width: 2}
     };
 
-    // Envelope points (editable) - draggable markers
+    // Envelope points (editable) - click to edit
     const trace_env_points = {
       x: editableEnvelope.map(pt => pt.gamma),
       y: editableEnvelope.map(pt => pt.Load),
       mode: 'markers',
-      name: '包絡線点 (ドラッグ移動可)',
+      name: '包絡線点',
       marker: {
         color: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 'red' : 'blue'),
         size: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 14 : 10),
         symbol: 'circle', 
         line: {color: 'white', width: 2}
       },
-      hovertemplate: '<b>変形角:</b> %{x:.6f}<br><b>荷重:</b> %{y:.3f}<br><i>ドラッグで移動、Delキーで削除</i><extra></extra>'
+      hovertemplate: '<b>変形角:</b> %{x:.6f}<br><b>荷重:</b> %{y:.3f}<br><i>クリックで編集、Delキーで削除</i><extra></extra>'
     };
 
     // Line I, II, III (Py determination)
@@ -892,7 +896,7 @@
     };
 
     const layout = {
-      title: '荷重-変形関係と評価直線 (ダブルクリックで点追加)',
+      title: '荷重-変形関係と評価直線',
       xaxis: {
         title: '変形角 γ (rad)',
         range: ranges.xRange,
@@ -958,39 +962,44 @@
     let selectedPointIndex = -1; // Del キー用の選択状態
     window._selectedEnvelopePoint = -1; // グローバルで選択状態を保持
     
-    // 包絡線点のクリック処理
-    plotDiv.on('plotly_click', function(data){
-  // 編集モード撤廃: 常に受け付け
-      
+    // 既存クリックハンドラを解除
+    if(_plotClickHandler && typeof plotDiv.removeListener === 'function'){
+      plotDiv.removeListener('plotly_click', _plotClickHandler);
+    }
+    // 包絡線点のクリック処理（クリックで即座に数値編集ダイアログを開く）
+    _plotClickHandler = function(data){
+      console.debug('[plotly_click] event points=', data && data.points ? data.points.length : 0);
       if(!data.points || data.points.length === 0) return;
       const pt = data.points[0];
-      
-      // 包絡線点トレース（trace 2）のクリック
+      console.debug('[plotly_click] curveNumber='+pt.curveNumber+' pointIndex='+pt.pointIndex);
       if(pt.curveNumber === 2){
-        // シングルクリック：点を選択（Del用）
         selectedPointIndex = pt.pointIndex;
         window._selectedEnvelopePoint = pt.pointIndex;
-        console.info('包絡線点 ' + selectedPointIndex + ' を選択（Delキーで削除可能）');
-        
-        // 選択状態を視覚的に反映
+        // 視覚的に選択反映
         highlightSelectedPoint(editableEnvelope);
+        // ダイアログを開く
+        openPointEditDialog();
+        console.debug('[plotly_click] ダイアログ表示要求');
         return;
       }
-      
       // 他のトレースをクリック：選択解除
       selectedPointIndex = -1;
       window._selectedEnvelopePoint = -1;
       highlightSelectedPoint(editableEnvelope);
-    });
+    };
+    plotDiv.on('plotly_click', _plotClickHandler);
     
     // ダブルクリックによる点追加やデフォルト操作は許容（別処理はしない）
     
     // ダブルクリックによる新規点追加機能は廃止（仕様変更）
     
     // Delキーで選択中の点を削除
+    // 既存のキーリスナーを解除
+    if(_keydownHandler){
+      document.removeEventListener('keydown', _keydownHandler);
+    }
     const handleKeydown = function(e){
-  // 編集モード撤廃
-      
+      // 編集モード撤廃
       if(e.key === 'Delete' || e.key === 'Del'){
         if(selectedPointIndex >= 0 && selectedPointIndex < editableEnvelope.length){
           deleteEnvelopePoint(selectedPointIndex, editableEnvelope);
@@ -1017,10 +1026,8 @@
         return;
       }
     };
-    
-    // 既存のリスナーを削除してから追加（重複防止）
-    document.removeEventListener('keydown', handleKeydown);
-    document.addEventListener('keydown', handleKeydown);
+    _keydownHandler = handleKeydown;
+    document.addEventListener('keydown', _keydownHandler);
     
     // ドラッグ操作は削除（仕様変更）
     
@@ -1059,20 +1066,8 @@
       'marker.color': [colors],
       'marker.size': [sizes]
     }, [2]); // trace 2: 包絡線点
-    // ドラッグ中ならツールチップ更新
-    if(pointTooltip && typeof window._dragPointIndex === 'number' && window._dragPointIndex >= 0){
-      const pt = editableEnvelope[window._dragPointIndex];
-      const xaxis = plotDiv._fullLayout.xaxis;
-      const yaxis = plotDiv._fullLayout.yaxis;
-      if(xaxis && yaxis){
-        const xPx = xaxis.c2p(pt.gamma);
-        const yPx = yaxis.c2p(pt.Load);
-        pointTooltip.style.left = (plotDiv.getBoundingClientRect().left + xPx + 12) + 'px';
-        pointTooltip.style.top = (plotDiv.getBoundingClientRect().top + yPx + 12) + 'px';
-        pointTooltip.innerHTML = 'γ: ' + pt.gamma.toFixed(6) + '<br>P: ' + pt.Load.toFixed(4) + ' kN';
-        if(window._isDragging){ pointTooltip.style.display = 'block'; }
-      }
-    }
+    // 旧ドラッグ用ツールチップは廃止
+    if(pointTooltip){ pointTooltip.style.display = 'none'; }
   }
   
   function deleteEnvelopePoint(pointIndex, editableEnvelope){
