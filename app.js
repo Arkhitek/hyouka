@@ -113,36 +113,43 @@
         const screenX = plotRect.left + pointX;
         const screenY = plotRect.top + pointY;
         
-        // ダイアログのサイズ（概算）
-        const dialogWidth = 320;
-        const dialogHeight = 200;
+        // ダイアログのサイズ（実測値ベース）
+        const dialogWidth = 340;
+        const dialogHeight = 220;
+        const margin = 60; // 点との間隔を広めに取る
         
         // 点が画面左半分にあれば右側に、右半分にあれば左側に表示
         let left, top;
-        if(screenX < window.innerWidth / 2){
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        
+        if(screenX < centerX){
           // 点が左側 → ダイアログを右側に
-          left = screenX + 40;
+          left = screenX + margin;
         } else {
           // 点が右側 → ダイアログを左側に
-          left = screenX - dialogWidth - 40;
+          left = screenX - dialogWidth - margin;
         }
         
         // 点が画面上半分にあれば下側に、下半分にあれば上側に
-        if(screenY < window.innerHeight / 2){
+        if(screenY < centerY){
           // 点が上側 → ダイアログを下側に
-          top = screenY + 40;
+          top = screenY + margin;
         } else {
           // 点が下側 → ダイアログを上側に
-          top = screenY - dialogHeight - 40;
+          top = screenY - dialogHeight - margin;
         }
         
         // 画面外にはみ出さないように調整
-        left = Math.max(10, Math.min(left, window.innerWidth - dialogWidth - 10));
-        top = Math.max(10, Math.min(top, window.innerHeight - dialogHeight - 10));
+        const minMargin = 20;
+        left = Math.max(minMargin, Math.min(left, window.innerWidth - dialogWidth - minMargin));
+        top = Math.max(minMargin, Math.min(top, window.innerHeight - dialogHeight - minMargin));
         
         content.style.left = left + 'px';
         content.style.top = top + 'px';
         content.style.transform = 'none';
+        
+        console.debug('[ダイアログ配置] 点位置=('+screenX.toFixed(0)+','+screenY.toFixed(0)+') → ダイアログ位置=('+left+','+top+')');
       } else {
         // フォールバック: 中央表示
         content.style.left = '50%';
@@ -178,7 +185,16 @@
     };
   }
 
-  function closePointEditDialog(){ pointEditDialog.style.display = 'none'; }
+  function closePointEditDialog(){ 
+    pointEditDialog.style.display = 'none'; 
+    pointEditDialog.classList.remove('custom-position');
+    const content = document.getElementById('pointEditContent');
+    if(content){
+      content.style.position = '';
+      content.style.left = '';
+      content.style.top = '';
+    }
+  }
 
   function applyPointEdit(){
     if(window._selectedEnvelopePoint < 0 || !envelopeData) return;
