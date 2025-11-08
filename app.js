@@ -1129,7 +1129,8 @@
       mode: 'lines+markers',
       name: '実験データ',
       line: {color: 'lightblue', width: 1},
-      marker: {color: 'lightblue', size: 4}
+      marker: {color: 'lightblue', size: 4},
+      hoverinfo: 'skip' // 試験データのホバーを無効化し、包絡線点を優先
     };
 
     // Envelope line - keep original sign
@@ -1138,7 +1139,8 @@
       y: editableEnvelope.map(pt => pt.Load), // Keep original sign from filtered data
       mode: 'lines',
       name: '包絡線',
-      line: {color: 'blue', width: 2}
+      line: {color: 'blue', width: 2},
+      hoverinfo: 'skip' // 包絡線ラインのホバーを無効化
     };
 
     // Envelope points (editable) - click to edit
@@ -1397,27 +1399,6 @@
       highlightSelectedPoint(editableEnvelope);
     };
     plotDiv.on('plotly_click', _plotClickHandler);
-    
-    // マウスホバー時に「クリックで編集」注釈を表示
-    plotDiv.on('plotly_hover', function(data){
-      if(!data.points || data.points.length === 0) return;
-      const pt = data.points[0];
-      if(pt.curveNumber === 2){ // 包絡線点
-        if(pointTooltip){
-          pointTooltip.textContent = 'クリックで編集';
-          pointTooltip.style.display = 'block';
-          pointTooltip.style.left = (data.event.pageX + 10) + 'px';
-          pointTooltip.style.top = (data.event.pageY - 25) + 'px';
-        }
-      }
-    });
-    
-    // マウスが点から離れたらツールチップを非表示
-    plotDiv.on('plotly_unhover', function(){
-      if(pointTooltip){
-        pointTooltip.style.display = 'none';
-      }
-    });
     
     // ダブルクリックによる点追加やデフォルト操作は許容（別処理はしない）
     
