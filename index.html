@@ -146,15 +146,43 @@
       useExcelTemplate: false
     }, window.APP_CONFIG || {});
 
-    // ロゴ: デフォルトはSVG。usePngLogo=trueの時のみPNGを表示（404防止）
+    // ロゴ: PNGかSVGを動的に読み分け。失敗時はテキストでフォールバック
     (function(){
       var el = document.getElementById('brandLogo');
       if(!el) return;
-      if(window.APP_CONFIG.usePngLogo){
-        el.innerHTML = '<img src="./arkhitek_logo.png" class="header-logo" alt="Arkhitek ロゴ" />';
-      } else {
-        el.innerHTML = '<img src="./logo_arkhitek.svg" class="header-logo" alt="Arkhitek ロゴ" />';
-      }
+      var usePng = !!(window.APP_CONFIG && window.APP_CONFIG.usePngLogo);
+      var img = new Image();
+      img.className = 'header-logo';
+      img.alt = 'Arkhitek ロゴ';
+      img.onload = function(){ el.textContent=''; el.appendChild(img); console.info('Logo loaded:', img.src); };
+      img.onerror = function(){
+        if(usePng){
+          console.warn('PNG logo not found, falling back to SVG');
+          var img2 = new Image();
+          img2.className = 'header-logo';
+          img2.alt = 'Arkhitek ロゴ';
+          img2.onload = function(){ el.textContent=''; el.appendChild(img2); console.info('Logo loaded (fallback SVG):', img2.src); };
+          img2.onerror = function(){
+            el.textContent='';
+            var span = document.createElement('span');
+            span.textContent = 'ARKHITEK';
+            span.style.fontWeight = 'bold';
+            span.style.fontSize = '20px';
+            el.appendChild(span);
+            console.warn('SVG logo also failed; using text fallback');
+          };
+          img2.src = './logo_arkhitek.svg';
+        } else {
+          el.textContent='';
+          var span = document.createElement('span');
+          span.textContent = 'ARKHITEK';
+          span.style.fontWeight = 'bold';
+          span.style.fontSize = '20px';
+          el.appendChild(span);
+          console.warn('SVG logo failed; using text fallback');
+        }
+      };
+      img.src = usePng ? './arkhitek_logo.png' : './logo_arkhitek.svg';
     })();
   </script>
 </body>
