@@ -1477,16 +1477,16 @@
       const clickX = e.clientX - bbox.left;
       const clickY = e.clientY - bbox.top;
       
-      // クリック位置をデータ座標に変換
-      const dataX = xaxis.p2c(clickX);
-      const dataY = yaxis.p2c(clickY);
+  // クリック位置をデータ座標に変換（pixel → linear）
+  const dataX = xaxis.p2l(clickX);
+  const dataY = yaxis.p2l(clickY);
       
       // 包絡線点との距離を計算して最寄り点を検索
       let minDist = Infinity;
       let nearestIdx = -1;
       editableEnvelope.forEach((pt, idx) => {
-        const px = xaxis.c2p(pt.gamma);
-        const py = yaxis.c2p(pt.Load);
+  const px = xaxis.l2p(pt.gamma);
+  const py = yaxis.l2p(pt.Load);
         const dist = Math.sqrt((clickX - px)**2 + (clickY - py)**2);
         if(dist < minDist){
           minDist = dist;
@@ -1532,9 +1532,9 @@
       const moveX = e.clientX - bbox.left;
       const moveY = e.clientY - bbox.top;
       
-      // データ座標に変換
-      const newGamma = xaxis.p2c(moveX);
-      const newLoad = yaxis.p2c(moveY);
+  // データ座標に変換（pixel → linear）
+  const newGamma = xaxis.p2l(moveX);
+  const newLoad = yaxis.p2l(moveY);
       
       // 包絡線点を更新
       editableEnvelope[shiftDragIndex].gamma = newGamma;
@@ -1658,10 +1658,10 @@
       const p1 = editableEnvelope[i];
       const p2 = editableEnvelope[i + 1];
       
-      const x1 = xaxis.c2p(p1.gamma);
-      const y1 = yaxis.c2p(p1.Load);
-      const x2 = xaxis.c2p(p2.gamma);
-      const y2 = yaxis.c2p(p2.Load);
+  const x1 = xaxis.l2p(p1.gamma);
+  const y1 = yaxis.l2p(p1.Load);
+  const x2 = xaxis.l2p(p2.gamma);
+  const y2 = yaxis.l2p(p2.Load);
       
       // 線分への最短距離を計算
       const dist = pointToSegmentDistance(clickX, clickY, x1, y1, x2, y2);
