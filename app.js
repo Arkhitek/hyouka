@@ -1796,6 +1796,13 @@
       // プロット更新
       updateEnvelopePlot(editableEnvelope);
       
+      // 点編集ダイアログが対象点を編集中なら、入力欄をリアルタイム更新（ユーザーのリクエスト対応）
+      if(pointEditDialog && pointEditDialog.style.display !== 'none' && window._selectedEnvelopePoint === shiftDragIndex){
+        // 表示精度は既存UIに合わせる（γ: 4～6桁, P: 3桁）必要に応じて後で統一可能
+        if(editGammaInput){ editGammaInput.value = newGamma.toFixed(4); }
+        if(editLoadInput){ editLoadInput.value = newLoad.toFixed(1); }
+      }
+
       // ツールチップ更新
       if(pointTooltip){
         pointTooltip.textContent = `γ: ${newGamma.toFixed(6)}, P: ${newLoad.toFixed(3)}`;
