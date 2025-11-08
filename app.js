@@ -20,12 +20,14 @@
   const gammaInput = document.getElementById('gammaInput');
   const loadInput = document.getElementById('loadInput');
   const wall_length_m = document.getElementById('wall_length_m');
-  const test_method = document.getElementById('test_method');
+  const specific_deformation = document.getElementById('specific_deformation');
   const alpha_factor = document.getElementById('alpha_factor');
+  const max_ultimate_deformation = document.getElementById('max_ultimate_deformation');
+  const c0_factor = document.getElementById('c0_factor');
+  const wall_preset = document.getElementById('wall_preset');
   const envelope_side = document.getElementById('envelope_side');
   const processButton = document.getElementById('processButton');
   const downloadExcelButton = document.getElementById('downloadExcelButton');
-  const createShareLinkButton = document.getElementById('createShareLinkButton');
   const clearDataButton = document.getElementById('clearDataButton');
   
   const plotDiv = document.getElementById('plot');
@@ -46,6 +48,30 @@
 
   function cloneEnvelope(env){
     return env.map(pt => ({gamma: pt.gamma, Load: pt.Load}));
+  }
+
+  // === Preset application ===
+  function applyWallPreset(code){
+    if(!code) return;
+    // 定義: specific (1/N), ultimate (1/N), c0
+    const map = {
+      wood_loaded:   { specific:120, ultimate:15, c0:0.2 },
+      wood_tierod:   { specific:150, ultimate:15, c0:0.2 },
+      lgs_true:      { specific:200, ultimate:30, c0:0.3 },
+      lgs_apparent:  { specific:120, ultimate:30, c0:0.3 }
+    };
+    const preset = map[code];
+    if(!preset) return;
+    specific_deformation.value = preset.specific;
+    max_ultimate_deformation.value = preset.ultimate;
+    c0_factor.value = preset.c0;
+    appendLog('対象耐力壁プリセット適用: '+code+' → 特定変形1/'+preset.specific+', 最大終局1/'+preset.ultimate+', C0='+preset.c0);
+  }
+
+  if(wall_preset){
+    wall_preset.addEventListener('change', e => {
+      applyWallPreset(e.target.value);
+    });
   }
 
   function pushHistory(current){
@@ -404,7 +430,6 @@
   loadInput.addEventListener('input', handleDirectInput);
   processButton.addEventListener('click', processData);
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
-  if(createShareLinkButton) createShareLinkButton.addEventListener('click', createShareLink);
   clearDataButton.addEventListener('click', clearInputData);
   
   if(undoButton) undoButton.addEventListener('click', performUndo);
@@ -423,7 +448,6 @@
     
     processButton.disabled = true;
     if(downloadExcelButton) downloadExcelButton.disabled = true;
-    if(createShareLinkButton) createShareLinkButton.disabled = true;
     if(undoButton) undoButton.disabled = true;
   if(redoButton) redoButton.disabled = true;
   if(openPointEditButton) openPointEditButton.disabled = true;
@@ -585,13 +609,21 @@
     try{
       const L = parseFloat(wall_length_m.value);
       const alpha = parseFloat(alpha_factor.value);
+      const c0 = parseFloat(c0_factor.value);
       const side = envelope_side.value;
-      const method = test_method.value;
+      const specificDeformationValue = parseFloat(specific_deformation.value);
+      const maxUltimateDeformationValue = parseFloat(max_ultimate_deformation.value);
 
-      if(!isFinite(L) || !isFinite(alpha)){
+      if(!isFinite(L) || !isFinite(alpha) || !isFinite(c0) || c0 < 0 || !isFinite(specificDeformationValue) || specificDeformationValue <= 0 || !isFinite(maxUltimateDeformationValue) || maxUltimateDeformationValue <= 0){
         alert('入力値が不正です。数値を正しく入力してください。');
         return;
       }
+      
+      // Calculate gamma_specific from 1/specificDeformationValue
+      const gamma_specific = 1.0 / specificDeformationValue;
+      
+      // Calculate delta_u_max from 1/maxUltimateDeformationValue
+      const delta_u_max = 1.0 / maxUltimateDeformationValue;
 
       // Direct input - data already has gamma and gamma0
       const dataWithAngles = rawData;
@@ -604,7 +636,7 @@
       }
 
       // Step 3: Calculate characteristic points
-  analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha);
+      analysisResults = calculateJTCCMMetrics(envelopeData, gamma_specific, delta_u_max, L, alpha, c0);
 
       // Step 4: Render results
       renderPlot(envelopeData, analysisResults);
@@ -626,13 +658,21 @@
     try{
       const L = parseFloat(wall_length_m.value);
       const alpha = parseFloat(alpha_factor.value);
+      const c0 = parseFloat(c0_factor.value);
       const side = envelope_side.value;
-      const method = test_method.value;
+      const specificDeformationValue = parseFloat(specific_deformation.value);
+      const maxUltimateDeformationValue = parseFloat(max_ultimate_deformation.value);
 
-      if(!isFinite(L) || !isFinite(alpha)){
+      if(!isFinite(L) || !isFinite(alpha) || !isFinite(c0) || c0 < 0 || !isFinite(specificDeformationValue) || specificDeformationValue <= 0 || !isFinite(maxUltimateDeformationValue) || maxUltimateDeformationValue <= 0){
         console.warn('入力値が不正です');
         return;
       }
+      
+      // Calculate gamma_specific from 1/specificDeformationValue
+      const gamma_specific = 1.0 / specificDeformationValue;
+      
+      // Calculate delta_u_max from 1/maxUltimateDeformationValue
+      const delta_u_max = 1.0 / maxUltimateDeformationValue;
 
       // Generate envelope from direct input data
       envelopeData = generateEnvelope(rawData, side);
@@ -642,14 +682,13 @@
       }
 
       // Calculate characteristic points
-  analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha);
+      analysisResults = calculateJTCCMMetrics(envelopeData, gamma_specific, delta_u_max, L, alpha, c0);
 
       // Render results
       renderPlot(envelopeData, analysisResults);
       renderResults(analysisResults);
 
-    if(downloadExcelButton) downloadExcelButton.disabled = false;
-    if(createShareLinkButton) createShareLinkButton.disabled = false;
+      if(downloadExcelButton) downloadExcelButton.disabled = false;
       historyStack = [cloneEnvelope(envelopeData)];
       redoStack = [];
       updateHistoryButtons();
@@ -704,7 +743,7 @@
   }
 
   // === JTCCM Metrics Calculation (Sections III, IV, V) ===
-  function calculateJTCCMMetrics(envelope, method, L, alpha){
+  function calculateJTCCMMetrics(envelope, gamma_specific, delta_u_max, L, alpha, c0){
     const results = {};
 
     // Determine the sign of the envelope (positive or negative side)
@@ -724,11 +763,11 @@
     results.lineIII = Py_result.lineIII;
 
     // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
-    const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, results.Pmax);
+    const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, results.Pmax, delta_u_max);
     Object.assign(results, Pu_result);
 
     // Calculate P0 (Section V.1)
-    const P0_result = calculateP0(results, envelope, method);
+    const P0_result = calculateP0(results, envelope, gamma_specific, c0);
     Object.assign(results, P0_result);
 
     // Calculate Pa and Magnification (Section V.2, V.3)
@@ -810,7 +849,7 @@
   }
 
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
-  function calculatePu_EnergyEquivalent(envelope, Py, Pmax){
+  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max){
     // Find δy (gamma where Load = Py on envelope)
     const pt_y = findPointAtLoad(envelope, Py);
     const delta_y = Math.abs(pt_y.gamma);
@@ -820,7 +859,7 @@
 
     // Find δu (Section IV.1 Step 9)
     const delta_u_candidate1 = findDeltaU_08Pmax(envelope, Pmax);
-    const delta_u_candidate2 = 1/15; // rad
+    const delta_u_candidate2 = delta_u_max; // rad from user input
     const delta_u = Math.min(delta_u_candidate1, delta_u_candidate2);
 
     // Calculate area S under envelope up to δu
@@ -898,7 +937,7 @@
   }
 
   // === P0 Calculation (Section V.1) ===
-  function calculateP0(results, envelope, method){
+  function calculateP0(results, envelope, gamma_specific, c0){
     const { Py, Pu, mu, Pmax } = results;
 
     // (a) Yield strength
@@ -908,8 +947,8 @@
     let p0_b;
     const denom = 2 * mu - 1;
     if(denom > 0){
-      // Pu / (1/ sqrt(2μ - 1)) * 0.2 = 0.2 * Pu * sqrt(2μ - 1)
-      p0_b = 0.2 * Pu * Math.sqrt(denom);
+      // Pu / (1/ sqrt(2μ - 1)) * C0 = C0 * Pu * sqrt(2μ - 1)
+      p0_b = c0 * Pu * Math.sqrt(denom);
     }else{
       // フォールバック（定義域外の場合は Py を採用）
       p0_b = Py;
@@ -918,17 +957,9 @@
     // (c) Max strength
     const p0_c = Pmax * (2/3);
 
-    // (d) Specific deformation
-    let p0_d;
-    if(method === 'loaded'){
-      // γ @ 1/120 rad
-      const pt = findPointAtGamma(envelope, 1/120, 'gamma');
-      p0_d = pt ? Math.abs(pt.Load) : Pmax;
-    }else{
-      // γ0 @ 1/150 rad
-      const pt = findPointAtGamma(envelope, 1/150, 'gamma0');
-      p0_d = pt ? Math.abs(pt.Load) : Pmax;
-    }
+    // (d) Specific deformation - use gamma_specific directly
+    const pt = findPointAtGamma(envelope, gamma_specific, 'gamma');
+    const p0_d = pt ? Math.abs(pt.Load) : Pmax;
 
     const P0 = Math.min(p0_a, p0_b, p0_c, p0_d);
 
@@ -1440,11 +1471,16 @@
       
       const L = parseFloat(wall_length_m.value);
       const alpha = parseFloat(alpha_factor.value);
-      const method = test_method.value;
+      const c0 = parseFloat(c0_factor.value);
+      const specificDeformationValue = parseFloat(specific_deformation.value);
+      const maxUltimateDeformationValue = parseFloat(max_ultimate_deformation.value);
       
-      if(!isFinite(L) || !isFinite(alpha)) return;
+      if(!isFinite(L) || !isFinite(alpha) || !isFinite(c0) || c0 < 0 || !isFinite(specificDeformationValue) || specificDeformationValue <= 0 || !isFinite(maxUltimateDeformationValue) || maxUltimateDeformationValue <= 0) return;
       
-      analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha);
+      const gamma_specific = 1.0 / specificDeformationValue;
+      const delta_u_max = 1.0 / maxUltimateDeformationValue;
+      
+      analysisResults = calculateJTCCMMetrics(envelopeData, gamma_specific, delta_u_max, L, alpha, c0);
       renderResults(analysisResults);
       
       // 評価直線などを再描画
@@ -1619,92 +1655,4 @@
     // ログ機能は無効化（コンソールのみに出力）
     console.log('[LOG]', message);
   }
-
-    // === Share Link Functions ===
-    function createShareLink(){
-      if(!analysisResults || !envelopeData){
-        alert('解析結果がありません。まずデータを入力して解析を実行してください。');
-        return;
-      }
-
-      try{
-        // Serialize input data and parameters
-        if(!wall_length_m || !test_method || !alpha_factor || !envelope_side){
-          throw new Error('必須入力要素が取得できません (IDの変更やDOM未構築の可能性)');
-        }
-        const shareData = {
-          data: rawData.map(d => [d.gamma, d.Load]), // [[gamma, Load], ...]
-          wall_length: parseFloat(wall_length_m.value) || 1.0,
-          test_method: (test_method.value || '').trim(),
-          alpha: parseFloat(alpha_factor.value) || 1.0,
-          side: (envelope_side.value || '').trim()
-        };
-
-        // Encode to base64 JSON
-        const jsonStr = JSON.stringify(shareData);
-        const base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
-
-        // Create URL with query parameter
-        const url = new URL(window.location.href.split('?')[0]);
-        url.searchParams.set('share', base64Data);
-
-        // Copy to clipboard
-        navigator.clipboard.writeText(url.toString()).then(() => {
-          alert('共有リンクをクリップボードにコピーしました。\n\nリンクを共有すると、同じ解析結果を表示できます。');
-        }).catch(err => {
-          // Fallback: show URL in prompt
-          prompt('共有リンクをコピーしてください:', url.toString());
-        });
-
-        appendLog('共有リンク作成: ' + url.toString());
-      }catch(error){
-        console.error('共有リンク作成エラー:', error);
-        alert('共有リンクの作成に失敗しました。');
-      }
-    }
-
-    function loadFromSharedLink(){
-      try{
-        const urlParams = new URLSearchParams(window.location.search);
-        const shareParam = urlParams.get('share');
-
-        if(!shareParam){
-          return; // No shared link
-        }
-
-        // Decode base64 JSON
-        const jsonStr = decodeURIComponent(escape(atob(shareParam)));
-        const shareData = JSON.parse(jsonStr);
-
-        // Validate data structure
-        if(!shareData.data || !Array.isArray(shareData.data)){
-          throw new Error('Invalid share data format');
-        }
-
-        // Populate input fields
-  if(wall_length_m) wall_length_m.value = shareData.wall_length || 1.0;
-  if(test_method) test_method.value = shareData.test_method || 'monotonic';
-  if(alpha_factor) alpha_factor.value = shareData.alpha || 1.0;
-  if(envelope_side) envelope_side.value = shareData.side || 'positive';
-
-        // Populate data table
-        rawData = shareData.data.map(([gamma, Load]) => ({ gamma, Load }));
-        gammaInput.value = rawData.map(d => d.gamma).join('\n');
-        loadInput.value = rawData.map(d => d.Load).join('\n');
-
-        // Auto-process
-        processData();
-
-        appendLog('共有リンクからデータを読み込みました');
-        alert('共有リンクからデータを読み込みました。');
-      }catch(error){
-        console.error('共有リンク読み込みエラー:', error);
-        alert('共有リンクの読み込みに失敗しました。URLが正しいか確認してください。');
-      }
-    }
-
-    // Load from shared link on page load
-    window.addEventListener('DOMContentLoaded', () => {
-      loadFromSharedLink();
-    });
 })();

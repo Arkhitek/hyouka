@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>木造耐力壁性能評価プログラム</title>
+  <title>耐力壁性能評価プログラム</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
@@ -35,8 +35,8 @@
         <div id="brandLogo" aria-label="Arkhitek ロゴ"></div>
       </div>
     </header>
-  <h1>木造耐力壁性能評価プログラム</h1>
-  <p class="subtitle">木造耐力壁及びその倍率の試験・評価業務方法書に準拠</p>
+    <h1>耐力壁性能評価プログラム</h1>
+    <p class="subtitle">耐力壁及びその倍率の試験・評価業務方法書に準拠</p>
 
   <div id="guide" class="card guide">
     <h2>📖 操作ガイド</h2>
@@ -65,6 +65,19 @@
 
   <div id="controls" class="card">
     <h2>1. 試験データの入力</h2>
+    <div class="row">
+      <div class="control-group">
+        <label for="wall_preset">対象耐力壁</label>
+        <select id="wall_preset">
+          <option value="">選択してください</option>
+          <option value="wood_loaded">木造(載荷式/無載荷式)</option>
+          <option value="wood_tierod">木造(タイロッド式)</option>
+          <option value="lgs_true">薄板軽量形鋼造(真のせん断変形角で評価)</option>
+          <option value="lgs_apparent">薄板軽量形鋼造(みかけのせん断変形角で評価)</option>
+        </select>
+        <small>選択すると、特定変形・最大終局変形・C0が即座に反映されます</small>
+      </div>
+    </div>
     
     <button id="clearDataButton">入力データ削除</button>
     
@@ -88,11 +101,9 @@
         <small>壁倍率算定用</small>
       </div>
       <div class="control-group">
-        <label for="test_method">試験方法</label>
-        <select id="test_method">
-          <option value="loaded">載荷式/無載荷式 (γ @1/120rad)</option>
-          <option value="tierod">タイロッド式 (γ0 @1/150rad)</option>
-        </select>
+        <label for="specific_deformation">特定変形時耐力の変形角 (1/入力値 rad)</label>
+        <input type="number" id="specific_deformation" value="120" step="1" min="1" />
+        <small>例: 120 → 1/120 rad</small>
       </div>
     </div>
 
@@ -101,6 +112,19 @@
         <label for="alpha_factor">耐力低減係数 α</label>
         <input type="number" id="alpha_factor" value="0.9" step="0.01" min="0" max="1" />
         <small>耐久性・施工性等の影響を勘案</small>
+      </div>
+      <div class="control-group">
+        <label for="max_ultimate_deformation">終局変位の最大値 (1/入力値 rad)</label>
+        <input type="number" id="max_ultimate_deformation" value="15" step="1" min="1" />
+        <small>例: 15 → 1/15 rad</small>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="control-group">
+        <label for="c0_factor">靭性基準係数 C0</label>
+        <input type="number" id="c0_factor" value="0.2" step="0.01" min="0" />
+        <small>靭性基準の計算に使用する係数</small>
       </div>
     </div>
 
@@ -124,10 +148,6 @@
 
     <div class="center-button">
       <button id="downloadExcelButton" class="download" disabled>結果Excelダウンロード</button>
-    </div>
-
-    <div class="center-button" style="margin-top: 10px;">
-      <button id="createShareLinkButton" class="download" disabled>共有リンク作成</button>
     </div>
   </div>
 
@@ -173,7 +193,7 @@
     <table id="results-table-p0">
       <tbody id="resultsP0">
         <tr><td>(a) 降伏耐力 Py (kN)</td><td id="val_p0_a">-</td></tr>
-        <tr><td>(b) 靭性基準 Pu/(1/√(2μ-1))×0.2 (kN)</td><td id="val_p0_b">-</td></tr>
+        <tr><td>(b) 靭性基準 Pu/(1/√(2μ-1))×C0 (kN)</td><td id="val_p0_b">-</td></tr>
         <tr><td>(c) 最大耐力基準 Pmax×2/3 (kN)</td><td id="val_p0_c">-</td></tr>
         <tr><td>(d) 特定変形時耐力 P@γ (kN)</td><td id="val_p0_d">-</td></tr>
         <tr class="highlight"><td>短期基準せん断耐力 P0 = Min(a,b,c,d) (kN)</td><td id="val_p0">-</td></tr>
