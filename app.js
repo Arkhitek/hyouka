@@ -10,6 +10,7 @@
   let envelopeData = null;
   let analysisResults = {};
   let relayoutHandlerAttached = false; // Plotly autoscale対策のイベント重複防止
+  let editMode = false; // 包絡線編集モードのON/OFF
 
   // === Elements ===
   const gammaInput = document.getElementById('gammaInput');
@@ -19,10 +20,9 @@
   const alpha_factor = document.getElementById('alpha_factor');
   const envelope_side = document.getElementById('envelope_side');
   const processButton = document.getElementById('processButton');
-  const downloadCsvButton = document.getElementById('downloadCsvButton');
-  const downloadPngButton = document.getElementById('downloadPngButton');
   const downloadExcelButton = document.getElementById('downloadExcelButton');
   const clearDataButton = document.getElementById('clearDataButton');
+  const editModeButton = document.getElementById('editModeButton');
   const plotDiv = document.getElementById('plot');
   const logOutput = document.getElementById('logOutput');
 
@@ -112,10 +112,9 @@
   gammaInput.addEventListener('input', handleDirectInput);
   loadInput.addEventListener('input', handleDirectInput);
   processButton.addEventListener('click', processData);
-  downloadCsvButton.addEventListener('click', downloadCsv);
-  downloadPngButton.addEventListener('click', downloadPng);
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
   clearDataButton.addEventListener('click', clearInputData);
+  if(editModeButton) editModeButton.addEventListener('click', toggleEditMode);
 
 
   function clearInputData(){
@@ -124,15 +123,52 @@
     rawData = [];
     envelopeData = null;
     analysisResults = {};
+    editMode = false;
+    if(editModeButton){
+      editModeButton.textContent = '包絡線編集モード: OFF';
+      editModeButton.classList.remove('active');
+      editModeButton.disabled = true;
+    }
     processButton.disabled = true;
-    downloadCsvButton.disabled = true;
-    downloadPngButton.disabled = true;
     plotDiv.innerHTML = '';
     if(logOutput) logOutput.textContent = '';
     // 結果表示リセット
     ['val_pmax','val_py','val_dy','val_K','val_pu','val_du','val_mu','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
       const el = document.getElementById(id); if(el) el.textContent='-';
     });
+  }
+
+  function toggleEditMode(){
+    if(!envelopeData || envelopeData.length === 0){
+      alert('先に解析を実行してください');
+      return;
+    }
+    
+    editMode = !editMode;
+    
+    if(editMode){
+      editModeButton.textContent = '包絡線編集モード: ON';
+      editModeButton.classList.add('active');
+      appendLog('包絡線編集モードを有効化しました');
+      
+      // グラフを固定モードに（ズーム・パン無効）
+      Plotly.relayout(plotDiv, {
+        'dragmode': false,
+        'xaxis.fixedrange': true,
+        'yaxis.fixedrange': true
+      });
+    } else {
+      editModeButton.textContent = '包絡線編集モード: OFF';
+      editModeButton.classList.remove('active');
+      appendLog('包絡線編集モードを無効化しました');
+      
+      // グラフを通常モードに（ズーム・パン有効）
+      Plotly.relayout(plotDiv, {
+        'dragmode': 'pan',
+        'xaxis.fixedrange': false,
+        'yaxis.fixedrange': false
+      });
+    }
   }
 
   // === 起動時 sample.csv 自動読込のみ ===
@@ -291,9 +327,8 @@
       renderPlot(envelopeData, analysisResults);
       renderResults(analysisResults);
 
-      downloadCsvButton.disabled = false;
-      downloadPngButton.disabled = false;
-  if(downloadExcelButton) downloadExcelButton.disabled = false;
+      if(downloadExcelButton) downloadExcelButton.disabled = false;
+      if(editModeButton) editModeButton.disabled = false; // 編集ボタン有効化
     }catch(error){
       alert('計算エラーが発生しました: ' + error.message);
       console.error(error);
@@ -328,9 +363,8 @@
       renderPlot(envelopeData, analysisResults);
       renderResults(analysisResults);
 
-      downloadCsvButton.disabled = false;
-      downloadPngButton.disabled = false;
-  if(downloadExcelButton) downloadExcelButton.disabled = false;
+      if(downloadExcelButton) downloadExcelButton.disabled = false;
+      if(editModeButton) editModeButton.disabled = false; // 編集ボタン有効化
     }catch(error){
       console.error('計算エラー:', error);
       appendLog('計算エラー(自動解析): ' + (error && error.stack ? error.stack : error.message));
@@ -783,6 +817,8 @@
     
     // 包絡線点のクリック処理
     plotDiv.on('plotly_click', function(data){
+      if(!editMode) return; // 編集モードOFF時は何もしない
+      
       if(!data.points || data.points.length === 0) return;
       const pt = data.points[0];
       
@@ -814,6 +850,8 @@
     let clickCount = 0;
     
     plotDiv.addEventListener('mousedown', function(e){
+      if(!editMode) return; // 編集モードOFF時は何もしない
+      
       clickCount++;
       
       if(clickCount === 1){
@@ -857,6 +895,8 @@
     
     // Delキーで選択中の点を削除
     const handleKeydown = function(e){
+      if(!editMode) return; // 編集モードOFF時は何もしない
+      
       if(e.key === 'Delete' || e.key === 'Del'){
         if(selectedPointIndex >= 0 && selectedPointIndex < editableEnvelope.length){
           deleteEnvelopePoint(selectedPointIndex, editableEnvelope);
@@ -870,10 +910,12 @@
     document.removeEventListener('keydown', handleKeydown);
     document.addEventListener('keydown', handleKeydown);
     
-    // マウスダウンで包絡線点をつかむ（ダブルクリックとは分離）
+    // マウスダウンで包絡線点をつかむ(ダブルクリックとは分離)
     let mousedownForDrag = null;
     
     plotDiv.addEventListener('mousedown', function(e){
+      if(!editMode) return; // 編集モードOFF時は何もしない
+      
       // ダブルクリック処理と競合しないように、シングルクリック時のみドラッグ開始
       if(e.detail > 1) return; // ダブルクリック以上は無視
       
@@ -915,6 +957,8 @@
     
     // マウス移動でドラッグ
     plotDiv.addEventListener('mousemove', function(e){
+      if(!editMode) return; // 編集モードOFF時は何もしない
+      
       // mousedownForDragがあり、少し動いたらドラッグ開始
       if(mousedownForDrag && !isDragging){
         const dx = e.clientX - mousedownForDrag.startX;
@@ -1154,42 +1198,6 @@
 
     document.getElementById('val_pa').textContent = r.Pa.toFixed(3);
     document.getElementById('val_magnification').textContent = r.magnification_rounded.toFixed(1) + ' 倍';
-  }
-
-  function downloadCsv(){
-    const r = analysisResults;
-    const csvContent = [
-      ['項目', '値', '単位'],
-      ['最大耐力 Pmax', r.Pmax.toFixed(4), 'kN'],
-      ['降伏耐力 Py', r.Py.toFixed(4), 'kN'],
-      ['降伏変位 δy', (r.delta_y).toFixed(6), 'rad'],
-      ['初期剛性 K', r.K.toFixed(4), 'kN/rad'],
-      ['終局耐力 Pu', r.Pu.toFixed(4), 'kN'],
-      ['終局変位 δu', (r.delta_u).toFixed(6), 'rad'],
-      ['塑性率 μ', r.mu.toFixed(4), ''],
-      ['P0(a) 降伏耐力', r.p0_a.toFixed(4), 'kN'],
-      ['P0(b) 靭性基準', r.p0_b.toFixed(4), 'kN'],
-      ['P0(c) 最大耐力基準', r.p0_c.toFixed(4), 'kN'],
-      ['P0(d) 特定変形時', r.p0_d.toFixed(4), 'kN'],
-      ['短期基準せん断耐力 P0', r.P0.toFixed(4), 'kN'],
-      ['短期許容せん断耐力 Pa', r.Pa.toFixed(4), 'kN'],
-      ['壁倍率', r.magnification_rounded.toFixed(1), '倍']
-    ];
-    
-    const csvString = csvContent.map(e => e.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csvString], {type: 'text/csv;charset=utf-8;'});
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'Results.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  function downloadPng(){
-    Plotly.downloadImage(plotDiv, {format:'png', width:1200, height:700, filename:'Graph'});
   }
 
   async function downloadExcel(){

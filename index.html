@@ -41,6 +41,8 @@
   <div id="controls" class="card">
     <h2>1. 試験データの入力</h2>
     
+    <button id="clearDataButton">入力データ削除</button>
+    
     <div class="row">
       <div class="control-group">
         <label for="gammaInput">変形角 γ (rad) - 1行1データ</label>
@@ -86,11 +88,9 @@
     </div>
 
     <button id="processButton" disabled>解析実行</button>
-  <button id="clearDataButton">入力データ削除</button>
+    <button id="editModeButton" class="edit-mode" disabled>包絡線編集モード: OFF</button>
 
     <div class="row">
-      <button id="downloadCsvButton" class="download" disabled>結果CSVダウンロード</button>
-      <button id="downloadPngButton" class="download" disabled>グラフPNGダウンロード</button>
       <button id="downloadExcelButton" class="download" disabled>結果Excelダウンロード</button>
     </div>
   </div>
