@@ -163,6 +163,7 @@
       content.style.position = '';
       content.style.left = '';
       content.style.top = '';
+      content.style.margin = '';
       content.style.transform = '';
     }
     console.debug('[ダイアログ] 閉じました');
@@ -268,8 +269,15 @@
     handle.addEventListener('mousedown', function(e){
       dragging = true; startX = e.clientX; startY = e.clientY;
       const rect = content.getBoundingClientRect();
-      origLeft = rect.left; origTop = rect.top; content.style.transform='';
+      origLeft = rect.left; origTop = rect.top;
+      // ドラッグ開始時にabsolute配置に切り替え
+      content.style.position = 'absolute';
+      content.style.left = origLeft + 'px';
+      content.style.top = origTop + 'px';
+      content.style.margin = '0';
+      content.style.transform = '';
       document.body.style.userSelect='none';
+      e.preventDefault(); // デフォルト動作を抑制
     });
     window.addEventListener('mousemove', function(e){
       if(!dragging) return;
