@@ -605,8 +605,8 @@
   function renderPlot(envelope, results){
     const { Pmax, Py, Py_gamma, lineI, lineII, lineIII, lineV, lineVI, delta_u, p0_a, p0_b, p0_c, p0_d } = results;
 
-    // Determine envelope sign based on the data
-    const envelopeSign = envelope[0] && envelope[0].Load < 0 ? -1 : 1;
+  // Draw evaluation overlays on the selected side explicitly
+  const envelopeSign = (envelope_side && envelope_side.value === 'negative') ? -1 : 1;
 
   // Calculate data range for auto-fitting based on envelope (not raw data)
   const envGammas = envelope.map(pt => pt.gamma);
