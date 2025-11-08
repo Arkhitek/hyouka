@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
   <!-- ExcelJS: SRIは環境差で失敗することがあるため integrity を外し、動的フォールバックを用意 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js" crossorigin="anonymous"></script>
   <script>
@@ -148,6 +150,7 @@
 
     <div class="center-button">
       <button id="downloadExcelButton" class="download" disabled>結果Excelダウンロード</button>
+      <button id="generatePdfButton" class="download" disabled>結果レポート作成(PDF)</button>
     </div>
   </div>
 

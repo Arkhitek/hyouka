@@ -28,6 +28,7 @@
   const envelope_side = document.getElementById('envelope_side');
   const processButton = document.getElementById('processButton');
   const downloadExcelButton = document.getElementById('downloadExcelButton');
+  const generatePdfButton = document.getElementById('generatePdfButton');
   const clearDataButton = document.getElementById('clearDataButton');
   
   const plotDiv = document.getElementById('plot');
@@ -115,85 +116,25 @@
     const idx = window._selectedEnvelopePoint;
     const pt = envelopeData[idx];
     console.debug('[openPointEditDialog] 開始 idx='+idx+' γ='+pt.gamma+' P='+pt.Load);
-    
-    // キャンセル用に元値保存（ダイアログ開く前に保存）
+
     const originalGamma = pt.gamma;
     const originalLoad = pt.Load;
     pointEditDialog.dataset.originalGamma = originalGamma.toString();
     pointEditDialog.dataset.originalLoad = originalLoad.toString();
-    
+
     editGammaInput.value = pt.gamma.toFixed(4);
     editLoadInput.value = pt.Load.toFixed(1);
-    
-    // ダイアログを選択点と重ならない位置に配置
+
+    // 右端固定表示（CSS custom-positionが制御）
     pointEditDialog.classList.add('custom-position');
     pointEditDialog.style.display = 'flex';
-    const content = document.getElementById('pointEditContent');
-    if(content){
-      content.style.position = 'absolute';
-      // 選択点のスクリーン座標を取得
-      const xaxis = plotDiv._fullLayout.xaxis;
-      const yaxis = plotDiv._fullLayout.yaxis;
-      if(xaxis && yaxis){
-        const pointX = xaxis.c2p(pt.gamma); // プロット内でのX座標（ピクセル）
-        const pointY = yaxis.c2p(pt.Load);  // プロット内でのY座標（ピクセル）
-        const plotRect = plotDiv.getBoundingClientRect();
-        
-        // 画面上の絶対座標
-        const screenX = plotRect.left + pointX;
-        const screenY = plotRect.top + pointY;
-        
-        // ダイアログのサイズ（実測値ベース）
-        const dialogWidth = 340;
-        const dialogHeight = 220;
-        const margin = 60; // 点との間隔を広めに取る
-        
-        // 点が画面左半分にあれば右側に、右半分にあれば左側に表示
-        let left, top;
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        
-        if(screenX < centerX){
-          // 点が左側 → ダイアログを右側に
-          left = screenX + margin;
-        } else {
-          // 点が右側 → ダイアログを左側に
-          left = screenX - dialogWidth - margin;
-        }
-        
-        // 点が画面上半分にあれば下側に、下半分にあれば上側に
-        if(screenY < centerY){
-          // 点が上側 → ダイアログを下側に
-          top = screenY + margin;
-        } else {
-          // 点が下側 → ダイアログを上側に
-          top = screenY - dialogHeight - margin;
-        }
-        
-        // 画面外にはみ出さないように調整
-        const minMargin = 20;
-        left = Math.max(minMargin, Math.min(left, window.innerWidth - dialogWidth - minMargin));
-        top = Math.max(minMargin, Math.min(top, window.innerHeight - dialogHeight - minMargin));
-        
-        content.style.left = left + 'px';
-        content.style.top = top + 'px';
-        content.style.transform = 'none';
-        
-        console.debug('[ダイアログ配置] 点位置=('+screenX.toFixed(0)+','+screenY.toFixed(0)+') → ダイアログ位置=('+left+','+top+')');
-      } else {
-        // フォールバック: 中央表示
-        content.style.position = 'absolute';
-        content.style.left = '50%';
-        content.style.top = '120px';
-        content.style.transform = 'translateX(-50%)';
-      }
-    }
+
     // 編集中リアルタイム反映
     editGammaInput.oninput = function(){
       const v = parseFloat(editGammaInput.value);
       if(!isNaN(v)){
         envelopeData[idx].gamma = v;
-        renderPlot(envelopeData, analysisResults); // 軽量更新: 全描画再生成（簡易）
+        renderPlot(envelopeData, analysisResults);
       }
     };
     editLoadInput.oninput = function(){
@@ -203,13 +144,11 @@
         renderPlot(envelopeData, analysisResults);
       }
     };
-    
-    // キャンセルボタンのハンドラを上書き（クロージャで現在の値をキャプチャ）
+
     cancelPointEditButton.onclick = function(){
       if(idx >= 0 && envelopeData && envelopeData[idx]){
         envelopeData[idx].gamma = originalGamma;
         envelopeData[idx].Load = originalLoad;
-        console.debug('[キャンセル] 元値に復元: γ='+originalGamma+' P='+originalLoad);
         renderPlot(envelopeData, analysisResults);
       }
       closePointEditDialog();
@@ -430,6 +369,7 @@
   loadInput.addEventListener('input', handleDirectInput);
   processButton.addEventListener('click', processData);
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
+  if(generatePdfButton) generatePdfButton.addEventListener('click', generatePdfReport);
   clearDataButton.addEventListener('click', clearInputData);
   
   if(undoButton) undoButton.addEventListener('click', performUndo);
@@ -446,8 +386,9 @@
     envelopeData = null;
     analysisResults = {};
     
-    processButton.disabled = true;
-    if(downloadExcelButton) downloadExcelButton.disabled = true;
+  processButton.disabled = true;
+  if(downloadExcelButton) downloadExcelButton.disabled = true;
+  if(generatePdfButton) generatePdfButton.disabled = true;
     if(undoButton) undoButton.disabled = true;
   if(redoButton) redoButton.disabled = true;
   if(openPointEditButton) openPointEditButton.disabled = true;
@@ -458,6 +399,104 @@
   ['val_pmax','val_py','val_dy','val_K','val_pu','val_dv','val_du','val_mu','val_ds','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
       const el = document.getElementById(id); if(el) el.textContent='-';
     });
+  }
+
+  // === PDF Generation ===
+  async function generatePdfReport(){
+    try{
+      if(!analysisResults || !envelopeData || !envelopeData.length){
+        alert('解析結果がありません');
+        return;
+      }
+      // Ensure jsPDF
+      const { jsPDF } = window.jspdf || {};
+      if(!jsPDF){
+        alert('jsPDFライブラリが読み込まれていません');
+        return;
+      }
+
+      // Capture plot as PNG
+      const plotPng = await Plotly.toImage(plotDiv, {format:'png', width:800, height:500});
+
+      const doc = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
+      const margin = 10;
+      const pageW = 210, pageH = 297;
+      let y = margin;
+
+      // Title
+      doc.setFontSize(14);
+      doc.text('耐力壁性能評価レポート', pageW/2, y, {align:'center'});
+      y += 8;
+      doc.setFontSize(9);
+      const ts = new Date().toISOString().replace('T',' ').substring(0,19);
+      doc.text('生成日時: '+ts, margin, y);
+      y += 4;
+
+      // Basic parameters table
+      const params = [
+        ['壁長さ L (m)', wall_length_m.value],
+        ['特定変形角 1/'+specific_deformation.value+' (rad)', (1/parseFloat(specific_deformation.value)).toExponential(3)],
+        ['最大終局変位 1/'+max_ultimate_deformation.value+' (rad)', (1/parseFloat(max_ultimate_deformation.value)).toExponential(3)],
+        ['C0', c0_factor.value],
+        ['α', alpha_factor.value]
+      ];
+      doc.setFontSize(10);
+      doc.text('入力パラメータ', margin, y);
+      y += 4;
+      doc.setFontSize(8);
+      for(const [k,v] of params){
+        doc.text(k+': '+v, margin, y);
+        y += 4;
+      }
+
+      // Plot image scaled
+      const imgW = 90; // mm
+      const imgH = imgW * 500/800; // preserve aspect
+      doc.addImage(plotPng, 'PNG', pageW - margin - imgW, margin + 8, imgW, imgH);
+
+      // Results table left side
+      y += 2;
+      doc.setFontSize(10);
+      doc.text('計算結果', margin, y);
+      y += 4;
+      doc.setFontSize(8);
+      const r = analysisResults;
+      const rows = [
+        ['Pmax (kN)', r.Pmax?.toFixed(3)],
+        ['Py (kN)', r.Py?.toFixed(3)],
+        ['Pu (kN)', r.Pu?.toFixed(3)],
+        ['δv (rad)', r.delta_v?.toExponential(3)],
+        ['δu (rad)', r.delta_u?.toExponential(3)],
+        ['μ', r.mu?.toFixed(2)],
+        ['Ds', r.mu && r.mu>0 ? (1/Math.sqrt(2*r.mu-1)).toFixed(3):'-'],
+        ['P0(a)', r.p0_a?.toFixed(3)],
+        ['P0(b)', r.p0_b?.toFixed(3)],
+        ['P0(c)', r.p0_c?.toFixed(3)],
+        ['P0(d)', r.p0_d?.toFixed(3)],
+        ['P0', r.P0?.toFixed(3)],
+        ['Pa (kN)', r.Pa?.toFixed(3)],
+        ['壁倍率', r.magnification_rounded?.toFixed(1)]
+      ];
+      for(const [k,v] of rows){
+        if(y > pageH - margin - 10){
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(k + ': ' + (v ?? '-'), margin, y);
+        y += 4;
+      }
+
+      // Footer
+      doc.setFontSize(7);
+      doc.text('© Arkhitek / Generated by 耐力壁性能評価プログラム', margin, pageH - margin);
+
+      doc.save('hyouka_report.pdf');
+      appendLog('PDFレポートを生成しました');
+    }catch(err){
+      console.error('PDF生成エラー:', err);
+      alert('PDF生成に失敗しました: ' + (err && err.message ? err.message : err));
+      appendLog('PDF生成エラー: ' + (err && err.stack ? err.stack : err));
+    }
   }
 
   // 編集モードは廃止
@@ -643,6 +682,7 @@
       renderResults(analysisResults);
 
   if(downloadExcelButton) downloadExcelButton.disabled = false;
+  if(generatePdfButton) generatePdfButton.disabled = false;
       historyStack = [cloneEnvelope(envelopeData)];
       redoStack = [];
       updateHistoryButtons();
