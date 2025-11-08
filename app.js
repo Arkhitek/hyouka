@@ -1140,7 +1140,10 @@
             const keys = e ? Object.keys(e) : [];
             const triggeredAuto = keys.some(k => /autorange$/.test(k) && e[k] === true);
             if(triggeredAuto && envelopeData && envelopeData.length){
-              fitEnvelopeRanges('Autoscaleボタン');
+              // Plotlyのデフォルトautoscale後に包絡線範囲へ再フィット
+              setTimeout(function(){
+                fitEnvelopeRanges('Autoscaleボタン');
+              }, 10);
             }
           }catch(err){ console.warn('autoscale再調整エラー', err); }
         });
