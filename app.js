@@ -215,7 +215,7 @@
     // 描画後、requestAnimationFrameで包絡線範囲を適用して全体フィット化を阻止
     requestAnimationFrame(()=>{
       if(cachedEnvelopeRange){
-        Plotly.relayout(plotDiv, {
+        safeRelayout(plotDiv, {
           'xaxis.autorange': false,
           'yaxis.autorange': false,
           'xaxis.range': cachedEnvelopeRange.xRange,
@@ -621,6 +621,33 @@
     return { xRange: [minX - mx, maxX + mx], yRange: [minY - my, maxY + my] };
   }
 
+  // Plotly.relayout の安全ラッパ：引数検証と失敗時の抑止・診断
+  function safeRelayout(gd, updates){
+    try{
+      if(typeof updates === 'string'){
+        // 第3引数が必要なケースは呼び出し側の責務。
+        // 誤用を避けるため、この分岐ではそのまま通さず警告して無視する。
+        console.warn('[safeRelayout] 文字列キーのみの呼び出しはサポートしていません:', updates);
+        return Promise.resolve();
+      }
+      if(!updates || typeof updates !== 'object' || Array.isArray(updates)){
+        console.warn('[safeRelayout] invalid updates. expect plain object. got =', updates);
+        return Promise.resolve();
+      }
+      const p = Plotly.relayout(gd, updates);
+      // Promise 対応: 失敗を握りつぶして未処理拒否を防ぐ
+      if(p && typeof p.then === 'function'){
+        return p.catch(err => {
+          console.warn('[safeRelayout] relayout rejected:', err);
+        });
+      }
+      return Promise.resolve();
+    }catch(err){
+      console.warn('[safeRelayout] wrapper error', err);
+      return Promise.resolve();
+    }
+  }
+
   // 包絡線範囲へフィット（初期描画・Autoscaleボタン・ダブルクリックで共通使用）
   function fitEnvelopeRanges(reason){
     try{
@@ -628,7 +655,7 @@
       const r = computeEnvelopeRanges(envelopeData);
       console.info('[Fit] 包絡線範囲へフィット:', reason || '');
       cachedEnvelopeRange = r; // キャッシュ更新
-      Plotly.relayout(plotDiv, {
+      safeRelayout(plotDiv, {
         'xaxis.autorange': false,
         'yaxis.autorange': false,
         'xaxis.range': r.xRange,
@@ -1322,7 +1349,7 @@
             // 何らかの理由でautorangeがtrueになった場合、即キャッシュ適用
             if((e['xaxis.autorange'] === true || e['yaxis.autorange'] === true) && cachedEnvelopeRange){
               requestAnimationFrame(()=>{
-                Plotly.relayout(plotDiv, {
+                safeRelayout(plotDiv, {
                   'xaxis.autorange': false,
                   'yaxis.autorange': false,
                   'xaxis.range': cachedEnvelopeRange.xRange,
@@ -1576,7 +1603,7 @@
         // Plotlyのドラッグモードを復元（エラーは握りつぶし）
         if(window.Plotly && plotDiv){
           try{
-            Plotly.relayout(plotDiv, {'dragmode': 'pan'}).catch(()=>{});
+            safeRelayout(plotDiv, {'dragmode': 'pan'});
           }catch(_){/* noop */}
         }
       }
