@@ -412,7 +412,7 @@
   redoStack = [];
     plotDiv.innerHTML = '';
     // 結果表示リセット
-  ['val_pmax','val_py','val_dy','val_K','val_pu','val_du','val_mu','val_ds','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
+  ['val_pmax','val_py','val_dy','val_K','val_pu','val_dv','val_du','val_mu','val_ds','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
       const el = document.getElementById(id); if(el) el.textContent='-';
     });
   }
@@ -1059,10 +1059,10 @@
       showlegend: true,
       height: 600,
       annotations: [
-        // 終局変位 δu (rad) → Line V の終点に表示
+        // 終局変位 δu (rad) → Line VI の終点（delta_u の位置）に表示
         {
-          x: (lineV.end.gamma) * envelopeSign,
-          y: (lineV.end.Load) * envelopeSign,
+          x: (lineVI.gamma_end) * envelopeSign,
+          y: (lineVI.Load) * envelopeSign,
           xref: 'x', yref: 'y',
           text: `δu=${delta_u.toExponential(2)} rad`,
           showarrow: true,
@@ -1083,10 +1083,10 @@
           bgcolor: 'rgba(255,255,255,0.7)',
           bordercolor: 'green', borderwidth: 1
         },
-        // 終局耐力 Pu (kN) → Line VI の水平線上に表示
+        // 終局耐力 Pu (kN) → Line V の終点（delta_v の位置）に表示
         {
-          x: (lineVI.gamma_end) * envelopeSign,
-          y: (lineVI.Load) * envelopeSign,
+          x: (lineV.end.gamma) * envelopeSign,
+          y: (lineV.end.Load) * envelopeSign,
           xref: 'x', yref: 'y',
           text: `Pu=${(lineVI.Load).toFixed(1)} kN`,
           showarrow: true,
@@ -1420,6 +1420,7 @@
     document.getElementById('val_dy').textContent = (r.delta_y).toFixed(5) + ' rad';
     document.getElementById('val_K').textContent = r.K.toFixed(2);
     document.getElementById('val_pu').textContent = r.Pu.toFixed(3);
+    document.getElementById('val_dv').textContent = (r.delta_v).toFixed(5) + ' rad';
     document.getElementById('val_du').textContent = (r.delta_u).toFixed(5) + ' rad';
     document.getElementById('val_mu').textContent = r.mu.toFixed(3);
     // 構造特性係数 Ds = 1 / sqrt(2μ - 1)
