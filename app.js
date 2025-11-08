@@ -734,6 +734,37 @@
               window.__CONSOLE_WARN_PATCHED__ = true;
               console.info('[patch.console.warn] installed');
             }
+            // 同様に console.log/console.error でも出る可能性を抑止
+            if(!window.__CONSOLE_LOG_PATCHED__ && typeof console !== 'undefined' && typeof console.log === 'function'){
+              const _origConsoleLog = console.log.bind(console);
+              console.log = function(){
+                try{
+                  const msg = arguments && arguments[0] ? String(arguments[0]) : '';
+                  if(msg.indexOf('Relayout fail') !== -1 || msg.indexOf('WARN: Relayout fail') !== -1){
+                    console.info('[console.log suppressed] Relayout fail:', arguments[1], arguments[2]);
+                    return;
+                  }
+                }catch(_){/* noop */}
+                return _origConsoleLog.apply(console, arguments);
+              };
+              window.__CONSOLE_LOG_PATCHED__ = true;
+              console.info('[patch.console.log] installed');
+            }
+            if(!window.__CONSOLE_ERROR_PATCHED__ && typeof console !== 'undefined' && typeof console.error === 'function'){
+              const _origConsoleError = console.error.bind(console);
+              console.error = function(){
+                try{
+                  const msg = arguments && arguments[0] ? String(arguments[0]) : '';
+                  if(msg.indexOf('Relayout fail') !== -1){
+                    console.info('[console.error suppressed] Relayout fail:', arguments[1], arguments[2]);
+                    return;
+                  }
+                }catch(_){/* noop */}
+                return _origConsoleError.apply(console, arguments);
+              };
+              window.__CONSOLE_ERROR_PATCHED__ = true;
+              console.info('[patch.console.error] installed');
+            }
           }catch(err){ /* ignore */ }
       // 追加: 内部 API Plots.relayout もパッチ（古いバージョンのみ）
       try{
