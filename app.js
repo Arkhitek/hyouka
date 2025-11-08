@@ -1468,10 +1468,6 @@
     let mousedownHandler = function(e){
       if(!e.shiftKey) return;
       
-      // Plotlyのデフォルトドラッグを無効化
-      e.stopPropagation();
-      e.preventDefault();
-      
       // Plotlyのイベントから最寄りの点を取得
       const xaxis = plotDiv._fullLayout.xaxis;
       const yaxis = plotDiv._fullLayout.yaxis;
@@ -1500,6 +1496,10 @@
       
       // 20px以内なら包絡線点と判定
       if(minDist < 20 && nearestIdx >= 0){
+        // Plotlyのデフォルトドラッグを無効化（先に実行）
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        
         shiftDragging = true;
         shiftDragIndex = nearestIdx;
         shiftDragStartX = clickX;
@@ -1577,11 +1577,12 @@
       }
     };
     
-    // イベントリスナー登録
-    plotDiv.addEventListener('mousedown', mousedownHandler);
-    plotDiv.addEventListener('mousemove', mousemoveHandler);
-    plotDiv.addEventListener('mouseup', mouseupHandler);
-    plotDiv.addEventListener('mouseleave', mouseupHandler);
+    // イベントリスナー登録（キャプチャフェーズで先にイベントを取得）
+    const plotlyLayer = plotDiv.querySelector('.plotly') || plotDiv;
+    plotlyLayer.addEventListener('mousedown', mousedownHandler, true); // キャプチャフェーズ
+    document.addEventListener('mousemove', mousemoveHandler); // グローバルに監視
+    document.addEventListener('mouseup', mouseupHandler);
+    document.addEventListener('mouseleave', mouseupHandler);
   }
   
   function highlightSelectedPoint(editableEnvelope){
