@@ -201,17 +201,26 @@
   }
 
   function applyPointEdit(){
-    if(window._selectedEnvelopePoint < 0 || !envelopeData) return;
+    console.debug('[適用ボタン] クリックされました');
+    if(window._selectedEnvelopePoint < 0 || !envelopeData) {
+      console.warn('[適用ボタン] 選択点またはデータが無効です');
+      return;
+    }
     const g = parseFloat(editGammaInput.value);
     const l = parseFloat(editLoadInput.value);
-    if(isNaN(g) || isNaN(l)){ alert('数値が不正です'); return; }
+    if(isNaN(g) || isNaN(l)){ 
+      alert('数値が不正です'); 
+      console.warn('[適用ボタン] 数値が不正です: γ='+g+', P='+l);
+      return; 
+    }
     envelopeData[window._selectedEnvelopePoint].gamma = g;
     envelopeData[window._selectedEnvelopePoint].Load = l;
     appendLog('点を数値編集しました (γ='+g+', P='+l+')');
     pushHistory(envelopeData);
+    console.debug('[適用ボタン] closePointEditDialog()を呼び出します');
+    closePointEditDialog();
     renderPlot(envelopeData, analysisResults);
     recalculateFromEnvelope(envelopeData);
-    closePointEditDialog();
   }
   
   // キャンセルボタンのハンドラは openPointEditDialog 内で動的に設定されるため、ここでは不要
