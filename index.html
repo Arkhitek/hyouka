@@ -89,6 +89,15 @@
 
     <button id="processButton" disabled>解析実行</button>
     <button id="editModeButton" class="edit-mode" disabled>包絡線編集モード: OFF</button>
+    <div class="row">
+      <div class="control-group">
+        <button id="undoButton" disabled>Undo (Ctrl+Z)</button>
+      </div>
+      <div class="control-group">
+        <button id="redoButton" disabled>Redo (Ctrl+Y)</button>
+      </div>
+    </div>
+    <button id="openPointEdit" disabled>選択点を数値編集 (E)</button>
 
     <div class="row">
       <button id="downloadExcelButton" class="download" disabled>結果Excelダウンロード</button>
@@ -96,6 +105,20 @@
   </div>
 
   <div id="plot" class="card"></div>
+  
+  <!-- ツールチップと数値調整ダイアログ -->
+  <div id="pointTooltip" class="tooltip" style="display:none; position:absolute;"></div>
+  <div id="pointEditDialog" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h3>点の座標を編集</h3>
+      <label>変形角 γ (rad): <input type="number" id="edit_gamma" step="0.000001" /></label>
+      <label>荷重 P (kN): <input type="number" id="edit_load" step="0.0001" /></label>
+      <div class="modal-actions">
+        <button id="applyPointEdit">適用</button>
+        <button id="cancelPointEdit">キャンセル</button>
+      </div>
+    </div>
+  </div>
 
   <div id="results" class="card">
     <h2>解析結果</h2>
