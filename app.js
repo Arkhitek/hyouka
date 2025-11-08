@@ -437,7 +437,7 @@
   redoStack = [];
     plotDiv.innerHTML = '';
     // 結果表示リセット
-  ['val_pmax','val_py','val_dy','val_K','val_pu','val_dv','val_du','val_mu','val_ds','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
+  ['val_pmax','val_py','val_dy','val_K','val_pu','val_dv','val_du','val_mu','val_ds','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_pa_per_m','val_pu_per_m','val_magnification'].forEach(id=>{
       const el = document.getElementById(id); if(el) el.textContent='-';
     });
   }
@@ -499,6 +499,7 @@
               <tr style="border-bottom:1px solid #ccc;"><td style="padding:6px 8px;">Pmax (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Pmax?.toFixed(3) ?? '-'}</td></tr>
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Py (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Py?.toFixed(3) ?? '-'}</td></tr>
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Pu (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Pu?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Pu (kN/m)</td><td style="text-align:right; padding:6px 8px;">${(function(){const L=parseFloat(wall_length_m.value);return (isFinite(L)&&L>0&&r.Pu)?(r.Pu/L).toFixed(3):'-';})()}</td></tr>
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">δv</td><td style="text-align:right; padding:6px 8px;">${fmt1(r.delta_v)}</td></tr>
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">δu</td><td style="text-align:right; padding:6px 8px;">${fmt1(r.delta_u)}</td></tr>
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">μ</td><td style="text-align:right; padding:6px 8px;">${r.mu?.toFixed(2) ?? '-'}</td></tr>
@@ -509,6 +510,7 @@
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">P0(d)</td><td style="text-align:right; padding:6px 8px;">${r.p0_d?.toFixed(3) ?? '-'}</td></tr>
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">P0</td><td style="text-align:right; padding:6px 8px;">${r.P0?.toFixed(3) ?? '-'}</td></tr>
               <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Pa (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Pa?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #ccc;"><td style="padding:6px 8px;">Pa (kN/m)</td><td style="text-align:right; padding:6px 8px;">${(function(){const L=parseFloat(wall_length_m.value);return (isFinite(L)&&L>0&&r.Pa)?(r.Pa/L).toFixed(3):'-';})()}</td></tr>
               <tr style="border-bottom:1px solid #ccc;"><td style="padding:6px 8px; font-weight:bold;">壁倍率</td><td style="text-align:right; padding:6px 8px; font-weight:bold;">${r.magnification_rounded?.toFixed(1) ?? '-'}</td></tr>
             </table>
           </div>
@@ -1639,6 +1641,17 @@
     document.getElementById('val_p0').textContent = r.P0.toFixed(3);
 
     document.getElementById('val_pa').textContent = r.Pa.toFixed(3);
+    // 1m当たり (kN/m)
+    const Lval = parseFloat(wall_length_m.value);
+    const paPerEl = document.getElementById('val_pa_per_m');
+    const puPerEl = document.getElementById('val_pu_per_m');
+    if(isFinite(Lval) && Lval>0){
+      if(paPerEl) paPerEl.textContent = (r.Pa / Lval).toFixed(3);
+      if(puPerEl) puPerEl.textContent = (r.Pu / Lval).toFixed(3);
+    } else {
+      if(paPerEl) paPerEl.textContent = '-';
+      if(puPerEl) puPerEl.textContent = '-';
+    }
     document.getElementById('val_magnification').textContent = r.magnification_rounded.toFixed(1) + ' 倍';
   }
 
@@ -1676,6 +1689,7 @@
       if(!wsSummary) wsSummary = wb.addWorksheet('Summary');
       const r = analysisResults;
       wsSummary.addRow(['項目','値','単位']);
+      const Lval2 = parseFloat(wall_length_m.value);
       const rows = [
         ['最大耐力 Pmax', r.Pmax, 'kN'],
         ['降伏耐力 Py', r.Py, 'kN'],
@@ -1690,6 +1704,8 @@
         ['P0(d) 特定変形時', r.p0_d, 'kN'],
         ['短期基準せん断耐力 P0', r.P0, 'kN'],
         ['短期許容せん断耐力 Pa', r.Pa, 'kN'],
+        ['短期許容せん断耐力 Pa (kN/m)', (isFinite(Lval2)&&Lval2>0)? r.Pa/Lval2 : '-', 'kN/m'],
+        ['終局耐力 Pu (kN/m)', (isFinite(Lval2)&&Lval2>0)? r.Pu/Lval2 : '-', 'kN/m'],
         ['壁倍率', r.magnification_rounded, '倍']
       ];
       rows.forEach(row => wsSummary.addRow(row));
