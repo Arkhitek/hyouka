@@ -1466,7 +1466,9 @@
     
     // マウスダウン: Shiftキー押下中かつ包絡線点上ならドラッグ開始
     let mousedownHandler = function(e){
-      if(!e.shiftKey) return;
+      // Ctrl+Shift 同時押しでのみドラッグ開始（Mac の command 対応は ctrlKey 優先）
+      const ctrlOrMeta = e.ctrlKey || e.metaKey;
+      if(!(ctrlOrMeta && e.shiftKey)) return;
       
       // Plotlyのイベントから最寄りの点を取得
       const xaxis = plotDiv._fullLayout.xaxis;
