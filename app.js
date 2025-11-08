@@ -870,7 +870,9 @@
     document.removeEventListener('keydown', handleKeydown);
     document.addEventListener('keydown', handleKeydown);
     
-    // マウスダウンで包絡線点をつかむ
+    // マウスダウンで包絡線点をつかむ（ダブルクリックとは分離）
+    let mousedownForDrag = null;
+    
     plotDiv.addEventListener('mousedown', function(e){
       // ダブルクリック処理と競合しないように、シングルクリック時のみドラッグ開始
       if(e.detail > 1) return; // ダブルクリック以上は無視
@@ -891,9 +893,6 @@
       let minDist = Infinity;
       let closestIdx = -1;
       editableEnvelope.forEach((pt, idx) => {
-        const dx = Math.abs(pt.gamma - xData);
-        const dy = Math.abs(pt.Load - yData);
-        // スクリーン座標での距離（近似）
         const xPx = xaxis.c2p(pt.gamma);
         const yPx = yaxis.c2p(pt.Load);
         const dist = Math.sqrt(Math.pow(xPx - x, 2) + Math.pow(yPx - y, 2));
@@ -904,20 +903,35 @@
       });
       
       if(closestIdx >= 0){
-        isDragging = true;
-        dragPointIndex = closestIdx;
-        plotDiv.style.cursor = 'grabbing';
-        
-        // ドラッグ中はPlotlyのパンを無効化
-        Plotly.relayout(plotDiv, {'dragmode': false});
-        
-        e.preventDefault(); // ドラッグ開始時にテキスト選択などを防止
-        e.stopPropagation(); // Plotlyのパンイベントを防止
+        // ドラッグ開始をわずかに遅延させる（クリックとの判別のため）
+        mousedownForDrag = {
+          index: closestIdx,
+          startX: e.clientX,
+          startY: e.clientY,
+          timestamp: Date.now()
+        };
       }
-    }, true); // キャプチャフェーズで先に処理
+    });
     
     // マウス移動でドラッグ
     plotDiv.addEventListener('mousemove', function(e){
+      // mousedownForDragがあり、少し動いたらドラッグ開始
+      if(mousedownForDrag && !isDragging){
+        const dx = e.clientX - mousedownForDrag.startX;
+        const dy = e.clientY - mousedownForDrag.startY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        // 3px以上動いたらドラッグ開始（クリックとの判別）
+        if(dist > 3){
+          isDragging = true;
+          dragPointIndex = mousedownForDrag.index;
+          plotDiv.style.cursor = 'grabbing';
+          
+          // ドラッグ中はPlotlyのパンを無効化
+          Plotly.relayout(plotDiv, {'dragmode': false});
+        }
+      }
+      
       if(!isDragging || dragPointIndex < 0) return;
       
       const bb = plotDiv.getBoundingClientRect();
@@ -941,6 +955,8 @@
     
     // マウスアップでドラッグ終了
     plotDiv.addEventListener('mouseup', function(e){
+      mousedownForDrag = null; // mousedown状態をクリア
+      
       if(isDragging){
         isDragging = false;
         dragPointIndex = -1;
@@ -955,6 +971,8 @@
     });
     
     plotDiv.addEventListener('mouseleave', function(e){
+      mousedownForDrag = null; // mousedown状態をクリア
+      
       if(isDragging){
         isDragging = false;
         dragPointIndex = -1;
