@@ -51,6 +51,16 @@
     return env.map(pt => ({gamma: pt.gamma, Load: pt.Load}));
   }
 
+  // === Utilities ===
+  // 角度[rad]を 1/N 表記の文字列へ変換（Nは四捨五入した整数）
+  function formatReciprocal(rad){
+    const v = Number(rad);
+    if(!isFinite(v) || v <= 0) return '-';
+    const denom = Math.round(1 / v);
+    if(!isFinite(denom) || denom <= 0) return '-';
+    return '1/' + denom.toLocaleString('ja-JP');
+  }
+
   // === Preset application ===
   function applyWallPreset(code){
     if(!code) return;
@@ -434,6 +444,7 @@
 
       // Build HTML content
       const r = analysisResults;
+      const fmt1 = (v) => formatReciprocal(v);
       container.innerHTML = `
         <div style="text-align:center; margin-bottom:15px;">
           <h1 style="font-size:24px; margin:10px 0;">耐力壁性能評価レポート</h1>
@@ -445,8 +456,8 @@
             <h3 style="font-size:16px; margin:10px 0; border-bottom:2px solid #333; padding-bottom:5px;">入力パラメータ</h3>
             <table style="width:100%; font-size:12px; border-collapse:collapse;">
               <tr><td style="padding:4px 0;">壁長さ L (m)</td><td style="text-align:right; padding:4px 0;">${wall_length_m.value}</td></tr>
-              <tr><td style="padding:4px 0;">特定変形角 1/${specific_deformation.value} (rad)</td><td style="text-align:right; padding:4px 0;">${(1/parseFloat(specific_deformation.value)).toExponential(3)}</td></tr>
-              <tr><td style="padding:4px 0;">最大終局変位 1/${max_ultimate_deformation.value} (rad)</td><td style="text-align:right; padding:4px 0;">${(1/parseFloat(max_ultimate_deformation.value)).toExponential(3)}</td></tr>
+              <tr><td style="padding:4px 0;">特定変形角</td><td style="text-align:right; padding:4px 0;">1/${Number(specific_deformation.value).toLocaleString('ja-JP')}</td></tr>
+              <tr><td style="padding:4px 0;">最大終局変位</td><td style="text-align:right; padding:4px 0;">1/${Number(max_ultimate_deformation.value).toLocaleString('ja-JP')}</td></tr>
               <tr><td style="padding:4px 0;">C0</td><td style="text-align:right; padding:4px 0;">${c0_factor.value}</td></tr>
               <tr><td style="padding:4px 0;">α</td><td style="text-align:right; padding:4px 0;">${alpha_factor.value}</td></tr>
             </table>
@@ -457,8 +468,8 @@
               <tr><td style="padding:4px 0;">Pmax (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pmax?.toFixed(3) ?? '-'}</td></tr>
               <tr><td style="padding:4px 0;">Py (kN)</td><td style="text-align:right; padding:4px 0;">${r.Py?.toFixed(3) ?? '-'}</td></tr>
               <tr><td style="padding:4px 0;">Pu (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pu?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">δv (rad)</td><td style="text-align:right; padding:4px 0;">${r.delta_v?.toExponential(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">δu (rad)</td><td style="text-align:right; padding:4px 0;">${r.delta_u?.toExponential(3) ?? '-'}</td></tr>
+              <tr><td style="padding:4px 0;">δv</td><td style="text-align:right; padding:4px 0;">${fmt1(r.delta_v)}</td></tr>
+              <tr><td style="padding:4px 0;">δu</td><td style="text-align:right; padding:4px 0;">${fmt1(r.delta_u)}</td></tr>
               <tr><td style="padding:4px 0;">μ</td><td style="text-align:right; padding:4px 0;">${r.mu?.toFixed(2) ?? '-'}</td></tr>
               <tr><td style="padding:4px 0;">Ds</td><td style="text-align:right; padding:4px 0;">${r.mu && r.mu>0 ? (1/Math.sqrt(2*r.mu-1)).toFixed(3) : '-'}</td></tr>
               <tr><td style="padding:4px 0;">P0(a)</td><td style="text-align:right; padding:4px 0;">${r.p0_a?.toFixed(3) ?? '-'}</td></tr>
@@ -1230,7 +1241,7 @@
           x: (lineVI.gamma_end) * envelopeSign,
           y: (lineVI.Load) * envelopeSign,
           xref: 'x', yref: 'y',
-          text: `δu=${delta_u.toExponential(2)} rad`,
+          text: `δu=${formatReciprocal(delta_u)}`,
           showarrow: true,
           ax: 20, ay: -20,
           font: {size: 12, color: 'purple'},
@@ -1242,7 +1253,7 @@
           x: (Py_gamma) * envelopeSign,
           y: (Py) * envelopeSign,
           xref: 'x', yref: 'y',
-          text: `Py=${Py.toFixed(1)} kN\nδy=${Py_gamma.toExponential(2)} rad`,
+          text: `Py=${Py.toFixed(1)} kN\nδy=${formatReciprocal(Py_gamma)}`,
           showarrow: true,
           ax: 20, ay: -40,
           font: {size: 12, color: 'green'},
@@ -1266,7 +1277,7 @@
           x: (lineV.end.gamma) * envelopeSign,
           y: (lineV.end.Load) * envelopeSign,
           xref: 'x', yref: 'y',
-          text: `δv=${delta_v.toExponential(2)} rad`,
+          text: `δv=${formatReciprocal(delta_v)}`,
           showarrow: true,
           ax: -30, ay: 20,
           font: {size: 12, color: 'purple'},
@@ -1621,11 +1632,11 @@
   function renderResults(r){
     document.getElementById('val_pmax').textContent = r.Pmax.toFixed(3);
     document.getElementById('val_py').textContent = r.Py.toFixed(3);
-    document.getElementById('val_dy').textContent = (r.delta_y).toFixed(5) + ' rad';
+    document.getElementById('val_dy').textContent = formatReciprocal(r.delta_y);
     document.getElementById('val_K').textContent = r.K.toFixed(2);
     document.getElementById('val_pu').textContent = r.Pu.toFixed(3);
-    document.getElementById('val_dv').textContent = (r.delta_v).toFixed(5) + ' rad';
-    document.getElementById('val_du').textContent = (r.delta_u).toFixed(5) + ' rad';
+    document.getElementById('val_dv').textContent = formatReciprocal(r.delta_v);
+    document.getElementById('val_du').textContent = formatReciprocal(r.delta_u);
     document.getElementById('val_mu').textContent = r.mu.toFixed(3);
     // 構造特性係数 Ds = 1 / sqrt(2μ - 1)
     let Ds = '-';
@@ -1683,10 +1694,10 @@
       const rows = [
         ['最大耐力 Pmax', r.Pmax, 'kN'],
         ['降伏耐力 Py', r.Py, 'kN'],
-        ['降伏変位 δy', r.delta_y, 'rad'],
+        ['降伏変位 δy', formatReciprocal(r.delta_y), '1/n'],
         ['初期剛性 K', r.K, 'kN/rad'],
         ['終局耐力 Pu', r.Pu, 'kN'],
-        ['終局変位 δu', r.delta_u, 'rad'],
+        ['終局変位 δu', formatReciprocal(r.delta_u), '1/n'],
         ['塑性率 μ', r.mu, ''],
         ['P0(a) 降伏耐力', r.p0_a, 'kN'],
         ['P0(b) 靭性基準', r.p0_b, 'kN'],
@@ -1703,7 +1714,7 @@
         const label = wsSummary.getCell(i,1).value;
         const cell = wsSummary.getCell(i,2);
         if(typeof cell.value !== 'number') continue;
-        if(/rad/.test(wsSummary.getCell(i,3).value)) cell.numFmt = '0.000000';
+        if(wsSummary.getCell(i,3).value === '1/n') continue; // reciprocalは文字列のまま
         else if(label === '初期剛性 K') cell.numFmt = '#,##0.00';
         else if(label === '壁倍率') cell.numFmt = '0.0';
         else cell.numFmt = '#,##0.000';
