@@ -665,7 +665,8 @@
         return A.pat<B.pat;
       }
       const ver = (window.Plotly && window.Plotly.version) ? window.Plotly.version : '0.0.0';
-      const needHeavyPatch = lt(ver, '2.31.0');
+  // 解析目的で常に heavy パッチ有効化（恒久対策前の診断ステージ）
+  const needHeavyPatch = true; // lt(ver, '2.31.0') を上書き
 
       const origRelayout = window.Plotly.relayout;
       if(typeof origRelayout !== 'function') return;
@@ -768,30 +769,52 @@
           }catch(err){ /* ignore */ }
       // 追加: 内部 API Plots.relayout もパッチ（古いバージョンのみ）
       try{
-        if(needHeavyPatch && window.Plotly.Plots && typeof window.Plotly.Plots.relayout === 'function' && !window.__PLOTS_RELAYOUT_PATCHED__){
+        if(window.Plotly.Plots && typeof window.Plotly.Plots.relayout === 'function' && !window.__PLOTS_RELAYOUT_PATCHED__){
           const origPlotsRelayout = window.Plotly.Plots.relayout;
+          let __relayoutFailSeq = 0;
           window.Plotly.Plots.relayout = function patchedPlotsRelayout(gd, a, b){
             try{
               if(typeof a === 'string'){
                 if(typeof b === 'undefined'){
-                  console.warn('[patch.plots.relayout] string key without value. ignore:', a);
+                  const id = ++__relayoutFailSeq;
+                  console.groupCollapsed('[patch.plots.relayout]#'+id+' string key without value (ignore) key=', a);
+                  console.trace('stack');
+                  console.groupEnd();
                   return Promise.resolve();
                 }
                 const pr = origPlotsRelayout.call(window.Plotly.Plots, gd, a, b);
                 return (pr && typeof pr.then === 'function') ? pr.catch(err => {
-                  console.warn('[patch.plots.relayout] rejected (string key):', a, b, err);
+                  const id = ++__relayoutFailSeq;
+                  console.groupCollapsed('[patch.plots.relayout]#'+id+' rejected (string key) key='+a);
+                  console.log('value=', b);
+                  console.log('error=', err);
+                  console.trace('stack');
+                  console.groupEnd();
                 }) : Promise.resolve();
               }
               if(!a || typeof a !== 'object' || Array.isArray(a)){
-                console.warn('[patch.plots.relayout] invalid updates (expect plain object). got =', a);
+                const id = ++__relayoutFailSeq;
+                console.groupCollapsed('[patch.plots.relayout]#'+id+' invalid updates (expect plain object)');
+                console.log('updates=', a);
+                console.trace('stack');
+                console.groupEnd();
                 return Promise.resolve();
               }
               const pr = origPlotsRelayout.call(window.Plotly.Plots, gd, a);
               return (pr && typeof pr.then === 'function') ? pr.catch(err => {
-                console.warn('[patch.plots.relayout] rejected (object updates):', a, err);
+                const id = ++__relayoutFailSeq;
+                console.groupCollapsed('[patch.plots.relayout]#'+id+' rejected (object updates)');
+                console.log('updates=', a);
+                console.log('error=', err);
+                console.trace('stack');
+                console.groupEnd();
               }) : Promise.resolve();
             }catch(err){
-              console.warn('[patch.plots.relayout] unexpected error', err);
+              const id = ++__relayoutFailSeq;
+              console.groupCollapsed('[patch.plots.relayout]#'+id+' unexpected error');
+              console.log('error=', err);
+              console.trace('stack');
+              console.groupEnd();
               return Promise.resolve();
             }
           };
