@@ -683,12 +683,50 @@
         }
       };
       window.__PLOTLY_RELAYOUT_PATCHED__ = true;
+      // 追加: 内部 API Plots.relayout もパッチしてライブラリ内部経路をガード
+      try{
+        if(window.Plotly.Plots && typeof window.Plotly.Plots.relayout === 'function' && !window.__PLOTS_RELAYOUT_PATCHED__){
+          const origPlotsRelayout = window.Plotly.Plots.relayout;
+          window.Plotly.Plots.relayout = function patchedPlotsRelayout(gd, a, b){
+            try{
+              if(typeof a === 'string'){
+                if(typeof b === 'undefined'){
+                  console.warn('[patch.plots.relayout] string key without value. ignore:', a);
+                  return Promise.resolve();
+                }
+                const pr = origPlotsRelayout.call(window.Plotly.Plots, gd, a, b);
+                return (pr && typeof pr.then === 'function') ? pr.catch(err => {
+                  console.warn('[patch.plots.relayout] rejected (string key):', a, b, err);
+                }) : Promise.resolve();
+              }
+              if(!a || typeof a !== 'object' || Array.isArray(a)){
+                console.warn('[patch.plots.relayout] invalid updates (expect plain object). got =', a);
+                return Promise.resolve();
+              }
+              const pr = origPlotsRelayout.call(window.Plotly.Plots, gd, a);
+              return (pr && typeof pr.then === 'function') ? pr.catch(err => {
+                console.warn('[patch.plots.relayout] rejected (object updates):', a, err);
+              }) : Promise.resolve();
+            }catch(err){
+              console.warn('[patch.plots.relayout] unexpected error', err);
+              return Promise.resolve();
+            }
+          };
+          window.__PLOTS_RELAYOUT_PATCHED__ = true;
+          console.info('[patch.plots.relayout] installed');
+        }
+      }catch(err){ console.warn('patch Plots.relayout failed', err); }
+
       // 未処理拒否の既定ログを抑制（理由 undefined のみ）
       window.addEventListener('unhandledrejection', function(ev){
         try{
           if(!ev) return;
-          if(ev.reason === undefined){
-            console.warn('[unhandledrejection] suppressed undefined reason from a promise');
+          // Plotly 由来かつ undefined 理由の拒否を抑制
+          const r = ev.reason;
+          const isUndefined = (typeof r === 'undefined');
+          const srcMatch = (ev && ev.promise && typeof ev.promise === 'object');
+          if(isUndefined){
+            console.warn('[unhandledrejection] suppressed undefined reason from a promise (likely Plotly relayout)');
             ev.preventDefault();
           }
         }catch(_){/* noop */}
