@@ -1059,12 +1059,12 @@
       showlegend: true,
       height: 600,
       annotations: [
-        // 終局耐力 Pu (kN) → Line VI の水平線上に表示
+        // 終局変位 δu (rad) → Line V の終点に表示
         {
-          x: (lineVI.gamma_end) * envelopeSign,
-          y: (lineVI.Load) * envelopeSign,
+          x: (lineV.end.gamma) * envelopeSign,
+          y: (lineV.end.Load) * envelopeSign,
           xref: 'x', yref: 'y',
-          text: `Pu=${(lineVI.Load).toFixed(1)} kN`,
+          text: `δu=${delta_u.toExponential(2)} rad`,
           showarrow: true,
           ax: 20, ay: -20,
           font: {size: 12, color: 'purple'},
@@ -1083,12 +1083,12 @@
           bgcolor: 'rgba(255,255,255,0.7)',
           bordercolor: 'green', borderwidth: 1
         },
-        // 終局変位 δu (rad) → Line V の終点付近に表示（結果の delta_u を使用）
+        // 終局耐力 Pu (kN) → Line VI の水平線上に表示
         {
-          x: (lineV.end.gamma) * envelopeSign,
-          y: (lineV.end.Load) * envelopeSign,
+          x: (lineVI.gamma_end) * envelopeSign,
+          y: (lineVI.Load) * envelopeSign,
           xref: 'x', yref: 'y',
-          text: `δu=${delta_u.toExponential(2)} rad`,
+          text: `Pu=${(lineVI.Load).toFixed(1)} kN`,
           showarrow: true,
           ax: 20, ay: -20,
           font: {size: 12, color: 'purple'},
