@@ -23,6 +23,7 @@
   const envelope_side = document.getElementById('envelope_side');
   const processButton = document.getElementById('processButton');
   const downloadExcelButton = document.getElementById('downloadExcelButton');
+  const createShareLinkButton = document.getElementById('createShareLinkButton');
   const clearDataButton = document.getElementById('clearDataButton');
   
   const plotDiv = document.getElementById('plot');
@@ -388,6 +389,7 @@
   loadInput.addEventListener('input', handleDirectInput);
   processButton.addEventListener('click', processData);
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
+  if(createShareLinkButton) createShareLinkButton.addEventListener('click', createShareLink);
   clearDataButton.addEventListener('click', clearInputData);
   
   if(undoButton) undoButton.addEventListener('click', performUndo);
@@ -404,8 +406,10 @@
     envelopeData = null;
     analysisResults = {};
     
-  processButton.disabled = true;
-  if(undoButton) undoButton.disabled = true;
+    processButton.disabled = true;
+    if(downloadExcelButton) downloadExcelButton.disabled = true;
+    if(createShareLinkButton) createShareLinkButton.disabled = true;
+    if(undoButton) undoButton.disabled = true;
   if(redoButton) redoButton.disabled = true;
   if(openPointEditButton) openPointEditButton.disabled = true;
   historyStack = [];
@@ -628,7 +632,8 @@
       renderPlot(envelopeData, analysisResults);
       renderResults(analysisResults);
 
-  if(downloadExcelButton) downloadExcelButton.disabled = false;
+    if(downloadExcelButton) downloadExcelButton.disabled = false;
+    if(createShareLinkButton) createShareLinkButton.disabled = false;
       historyStack = [cloneEnvelope(envelopeData)];
       redoStack = [];
       updateHistoryButtons();
@@ -1140,10 +1145,11 @@
             const keys = e ? Object.keys(e) : [];
             const triggeredAuto = keys.some(k => /autorange$/.test(k) && e[k] === true);
             if(triggeredAuto && envelopeData && envelopeData.length){
-              // Plotlyのデフォルトautoscale後に包絡線範囲へ再フィット
-              setTimeout(function(){
-                fitEnvelopeRanges('Autoscaleボタン');
-              }, 10);
+              // Plotlyのデフォルトautoscale処理を待ってから包絡線範囲へ強制的に再設定
+              // 複数のタイミングで実行して確実に上書き
+              setTimeout(function(){ fitEnvelopeRanges('Autoscaleボタン(1回目)'); }, 0);
+              setTimeout(function(){ fitEnvelopeRanges('Autoscaleボタン(2回目)'); }, 50);
+              setTimeout(function(){ fitEnvelopeRanges('Autoscaleボタン(3回目)'); }, 100);
             }
           }catch(err){ console.warn('autoscale再調整エラー', err); }
         });
@@ -1580,4 +1586,89 @@
     // ログ機能は無効化（コンソールのみに出力）
     console.log('[LOG]', message);
   }
+
+    // === Share Link Functions ===
+    function createShareLink(){
+      if(!analysisResults || !envelopeData){
+        alert('解析結果がありません。まずデータを入力して解析を実行してください。');
+        return;
+      }
+
+      try{
+        // Serialize input data and parameters
+        const shareData = {
+          data: rawData.map(d => [d.gamma, d.Load]), // [[gamma, Load], ...]
+          wall_length: parseFloat(wallLengthInput.value) || 1.0,
+          test_method: testMethodSelect.value,
+          alpha: parseFloat(alphaFactorInput.value) || 1.0,
+          side: envelopeSideSelect.value
+        };
+
+        // Encode to base64 JSON
+        const jsonStr = JSON.stringify(shareData);
+        const base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
+
+        // Create URL with query parameter
+        const url = new URL(window.location.href.split('?')[0]);
+        url.searchParams.set('share', base64Data);
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(url.toString()).then(() => {
+          alert('共有リンクをクリップボードにコピーしました。\n\nリンクを共有すると、同じ解析結果を表示できます。');
+        }).catch(err => {
+          // Fallback: show URL in prompt
+          prompt('共有リンクをコピーしてください:', url.toString());
+        });
+
+        appendLog('共有リンク作成: ' + url.toString());
+      }catch(error){
+        console.error('共有リンク作成エラー:', error);
+        alert('共有リンクの作成に失敗しました。');
+      }
+    }
+
+    function loadFromSharedLink(){
+      try{
+        const urlParams = new URLSearchParams(window.location.search);
+        const shareParam = urlParams.get('share');
+
+        if(!shareParam){
+          return; // No shared link
+        }
+
+        // Decode base64 JSON
+        const jsonStr = decodeURIComponent(escape(atob(shareParam)));
+        const shareData = JSON.parse(jsonStr);
+
+        // Validate data structure
+        if(!shareData.data || !Array.isArray(shareData.data)){
+          throw new Error('Invalid share data format');
+        }
+
+        // Populate input fields
+        wallLengthInput.value = shareData.wall_length || 1.0;
+        testMethodSelect.value = shareData.test_method || 'monotonic';
+        alphaFactorInput.value = shareData.alpha || 1.0;
+        envelopeSideSelect.value = shareData.side || 'positive';
+
+        // Populate data table
+        rawData = shareData.data.map(([gamma, Load]) => ({ gamma, Load }));
+        gammaInput.value = rawData.map(d => d.gamma).join('\n');
+        loadInput.value = rawData.map(d => d.Load).join('\n');
+
+        // Auto-process
+        processData();
+
+        appendLog('共有リンクからデータを読み込みました');
+        alert('共有リンクからデータを読み込みました。');
+      }catch(error){
+        console.error('共有リンク読み込みエラー:', error);
+        alert('共有リンクの読み込みに失敗しました。URLが正しいか確認してください。');
+      }
+    }
+
+    // Load from shared link on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadFromSharedLink();
+    });
 })();
