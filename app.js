@@ -926,7 +926,21 @@
   const envelopeSign = (envelope_side && envelope_side.value === 'negative') ? -1 : 1;
 
   // Calculate data range for auto-fitting based on envelope (not raw data)
-    const ranges = computeEnvelopeRanges(envelope);
+      // 現在の範囲を保持するか、新規計算するか
+      let ranges;
+      const isDialogOpen = pointEditDialog && pointEditDialog.style.display !== 'none';
+      if(isDialogOpen && plotDiv && plotDiv._fullLayout && plotDiv._fullLayout.xaxis && plotDiv._fullLayout.yaxis){
+        // ポップアップ表示中は既存の範囲を保持
+        ranges = {
+          xRange: [plotDiv._fullLayout.xaxis.range[0], plotDiv._fullLayout.xaxis.range[1]],
+          yRange: [plotDiv._fullLayout.yaxis.range[0], plotDiv._fullLayout.yaxis.range[1]]
+        };
+        console.debug('[renderPlot] ポップアップ表示中 - 描画範囲を保持:', ranges);
+      } else {
+        // 新規計算
+        ranges = computeEnvelopeRanges(envelope);
+        console.debug('[renderPlot] 描画範囲を新規計算:', ranges);
+      }
     
     // 包絡線データを編集可能にするための状態管理
     let editableEnvelope = envelope.map(pt => ({...pt}));    // Original raw data (all points) - showing positive and negative loads
