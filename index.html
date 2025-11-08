@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>木造耐力壁性能評価プログラム (JTCCM準拠)</title>
+  <title>木造耐力壁性能評価プログラム</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
 </head>
 <body>
   <h1>木造耐力壁性能評価プログラム</h1>
-  <p class="subtitle">木造耐力壁及びその倍率の試験・評価業務方法書（JTCCM）準拠</p>
+  <p class="subtitle">木造耐力壁及びその倍率の試験・評価業務方法書に準拠</p>
 
   <div id="controls" class="card">
     <h2>1. 試験データの入力</h2>
@@ -48,11 +48,6 @@
         <label for="alpha_factor">耐力低減係数 α</label>
         <input type="number" id="alpha_factor" value="1.0" step="0.01" min="0" max="1" />
         <small>耐久性・施工性等の影響を勘案</small>
-      </div>
-      <div class="control-group">
-        <label for="n_samples">試験体数 n</label>
-        <input type="number" id="n_samples" value="1" step="1" min="1" />
-        <small>n≧3の場合、ばらつき係数を適用</small>
       </div>
     </div>
 

@@ -16,7 +16,6 @@
   const wall_length_m = document.getElementById('wall_length_m');
   const test_method = document.getElementById('test_method');
   const alpha_factor = document.getElementById('alpha_factor');
-  const n_samples = document.getElementById('n_samples');
   const envelope_side = document.getElementById('envelope_side');
   const processButton = document.getElementById('processButton');
   const downloadCsvButton = document.getElementById('downloadCsvButton');
@@ -241,12 +240,11 @@
     try{
       const L = parseFloat(wall_length_m.value);
       const alpha = parseFloat(alpha_factor.value);
-      const n = parseInt(n_samples.value, 10);
       const side = envelope_side.value;
       const method = test_method.value;
 
-      if(!isFinite(L) || !isFinite(alpha) || !isFinite(n)){
-        alert('入力値が不正です。すべての数値を正しく入力してください。');
+      if(!isFinite(L) || !isFinite(alpha)){
+        alert('入力値が不正です。数値を正しく入力してください。');
         return;
       }
 
@@ -261,7 +259,7 @@
       }
 
       // Step 3: Calculate characteristic points
-      analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha, n);
+  analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha);
 
       // Step 4: Render results
       renderPlot(envelopeData, analysisResults);
@@ -280,11 +278,10 @@
     try{
       const L = parseFloat(wall_length_m.value);
       const alpha = parseFloat(alpha_factor.value);
-      const n = parseInt(n_samples.value, 10);
       const side = envelope_side.value;
       const method = test_method.value;
 
-      if(!isFinite(L) || !isFinite(alpha) || !isFinite(n)){
+      if(!isFinite(L) || !isFinite(alpha)){
         console.warn('入力値が不正です');
         return;
       }
@@ -297,7 +294,7 @@
       }
 
       // Calculate characteristic points
-      analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha, n);
+  analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha);
 
       // Render results
       renderPlot(envelopeData, analysisResults);
@@ -355,7 +352,7 @@
   }
 
   // === JTCCM Metrics Calculation (Sections III, IV, V) ===
-  function calculateJTCCMMetrics(envelope, method, L, alpha, n){
+  function calculateJTCCMMetrics(envelope, method, L, alpha){
     const results = {};
 
     // Determine the sign of the envelope (positive or negative side)
@@ -704,7 +701,7 @@
     };
 
     const layout = {
-      title: '荷重-変形関係と評価直線（JTCCM準拠）',
+  title: '荷重-変形関係と評価直線',
       xaxis: {
         title: '見掛けのせん断変形角 γ (rad)',
         range: [minGamma - gammaMargin, maxGamma + gammaMargin]
