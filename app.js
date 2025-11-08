@@ -952,6 +952,9 @@
           startY: e.clientY,
           timestamp: Date.now()
         };
+        // Plotlyのパン開始を抑止（ドラッグ操作を優先）
+        e.preventDefault();
+        e.stopPropagation();
       }
     });
     
@@ -1006,8 +1009,8 @@
         dragPointIndex = -1;
         plotDiv.style.cursor = 'default';
         
-        // ドラッグ終了後にパンモードを復元
-        Plotly.relayout(plotDiv, {'dragmode': 'pan'});
+  // ドラッグ終了後のドラッグモード復元（編集モードON中は固定）
+  Plotly.relayout(plotDiv, {'dragmode': editMode ? false : 'pan'});
         
         // ドラッグ終了後に再計算
         recalculateFromEnvelope(editableEnvelope);
@@ -1022,8 +1025,8 @@
         dragPointIndex = -1;
         plotDiv.style.cursor = 'default';
         
-        // マウスが外れた場合もパンモード復元
-        Plotly.relayout(plotDiv, {'dragmode': 'pan'});
+  // マウスが外れた場合も、編集モードON中は固定、OFFならパンへ
+  Plotly.relayout(plotDiv, {'dragmode': editMode ? false : 'pan'});
       }
     });
   }
