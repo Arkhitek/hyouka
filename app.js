@@ -477,31 +477,39 @@
         <div style="display:flex; gap:20px;">
           <div style="flex:1;">
             <h3 style="font-size:16px; margin:10px 0; border-bottom:2px solid #333; padding-bottom:5px;">入力パラメータ</h3>
-            <table style="width:100%; font-size:12px; border-collapse:collapse;">
-              <tr><td style="padding:4px 0;">壁長さ L (m)</td><td style="text-align:right; padding:4px 0;">${wall_length_m.value}</td></tr>
-              <tr><td style="padding:4px 0;">特定変形角</td><td style="text-align:right; padding:4px 0;">1/${Number(specific_deformation.value).toLocaleString('ja-JP')}</td></tr>
-              <tr><td style="padding:4px 0;">最大終局変位</td><td style="text-align:right; padding:4px 0;">1/${Number(max_ultimate_deformation.value).toLocaleString('ja-JP')}</td></tr>
-              <tr><td style="padding:4px 0;">C0</td><td style="text-align:right; padding:4px 0;">${c0_factor.value}</td></tr>
-              <tr><td style="padding:4px 0;">α</td><td style="text-align:right; padding:4px 0;">${alpha_factor.value}</td></tr>
+            <table style="width:100%; font-size:12px; border-collapse:collapse; table-layout:fixed;">
+              <colgroup>
+                <col style="width:60%">
+                <col style="width:40%">
+              </colgroup>
+              <tr style="border-bottom:1px solid #ccc;"><td style="padding:6px 8px;">壁長さ L (m)</td><td style="text-align:right; padding:6px 8px;">${wall_length_m.value}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">特定変形角</td><td style="text-align:right; padding:6px 8px;">1/${Number(specific_deformation.value).toLocaleString('ja-JP')}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">最大終局変位</td><td style="text-align:right; padding:6px 8px;">1/${Number(max_ultimate_deformation.value).toLocaleString('ja-JP')}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">C0</td><td style="text-align:right; padding:6px 8px;">${c0_factor.value}</td></tr>
+              <tr style="border-bottom:1px solid #ccc;"><td style="padding:6px 8px;">α</td><td style="text-align:right; padding:6px 8px;">${alpha_factor.value}</td></tr>
             </table>
           </div>
           <div style="flex:1;">
             <h3 style="font-size:16px; margin:10px 0; border-bottom:2px solid #333; padding-bottom:5px;">計算結果</h3>
-            <table style="width:100%; font-size:12px; border-collapse:collapse;">
-              <tr><td style="padding:4px 0;">Pmax (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pmax?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">Py (kN)</td><td style="text-align:right; padding:4px 0;">${r.Py?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">Pu (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pu?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">δv</td><td style="text-align:right; padding:4px 0;">${fmt1(r.delta_v)}</td></tr>
-              <tr><td style="padding:4px 0;">δu</td><td style="text-align:right; padding:4px 0;">${fmt1(r.delta_u)}</td></tr>
-              <tr><td style="padding:4px 0;">μ</td><td style="text-align:right; padding:4px 0;">${r.mu?.toFixed(2) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">Ds</td><td style="text-align:right; padding:4px 0;">${r.mu && r.mu>0 ? (1/Math.sqrt(2*r.mu-1)).toFixed(3) : '-'}</td></tr>
-              <tr><td style="padding:4px 0;">P0(a)</td><td style="text-align:right; padding:4px 0;">${r.p0_a?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">P0(b)</td><td style="text-align:right; padding:4px 0;">${r.p0_b?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">P0(c)</td><td style="text-align:right; padding:4px 0;">${r.p0_c?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">P0(d)</td><td style="text-align:right; padding:4px 0;">${r.p0_d?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">P0</td><td style="text-align:right; padding:4px 0;">${r.P0?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0;">Pa (kN)</td><td style="text-align:right; padding:4px 0;">${r.Pa?.toFixed(3) ?? '-'}</td></tr>
-              <tr><td style="padding:4px 0; font-weight:bold;">壁倍率</td><td style="text-align:right; padding:4px 0; font-weight:bold;">${r.magnification_rounded?.toFixed(1) ?? '-'}</td></tr>
+            <table style="width:100%; font-size:12px; border-collapse:collapse; table-layout:fixed;">
+              <colgroup>
+                <col style="width:60%">
+                <col style="width:40%">
+              </colgroup>
+              <tr style="border-bottom:1px solid #ccc;"><td style="padding:6px 8px;">Pmax (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Pmax?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Py (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Py?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Pu (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Pu?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">δv</td><td style="text-align:right; padding:6px 8px;">${fmt1(r.delta_v)}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">δu</td><td style="text-align:right; padding:6px 8px;">${fmt1(r.delta_u)}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">μ</td><td style="text-align:right; padding:6px 8px;">${r.mu?.toFixed(2) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Ds</td><td style="text-align:right; padding:6px 8px;">${r.mu && r.mu>0 ? (1/Math.sqrt(2*r.mu-1)).toFixed(3) : '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">P0(a)</td><td style="text-align:right; padding:6px 8px;">${r.p0_a?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">P0(b)</td><td style="text-align:right; padding:6px 8px;">${r.p0_b?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">P0(c)</td><td style="text-align:right; padding:6px 8px;">${r.p0_c?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">P0(d)</td><td style="text-align:right; padding:6px 8px;">${r.p0_d?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">P0</td><td style="text-align:right; padding:6px 8px;">${r.P0?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #eee;"><td style="padding:6px 8px;">Pa (kN)</td><td style="text-align:right; padding:6px 8px;">${r.Pa?.toFixed(3) ?? '-'}</td></tr>
+              <tr style="border-bottom:1px solid #ccc;"><td style="padding:6px 8px; font-weight:bold;">壁倍率</td><td style="text-align:right; padding:6px 8px; font-weight:bold;">${r.magnification_rounded?.toFixed(1) ?? '-'}</td></tr>
             </table>
           </div>
         </div>
