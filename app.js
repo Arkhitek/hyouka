@@ -1508,8 +1508,7 @@
         shiftDragStartY = clickY;
         plotDiv.style.cursor = 'move';
         
-        // Plotlyのドラッグモードを一時的に無効化
-        Plotly.relayout(plotDiv, {'dragmode': false});
+  // Plotlyデフォルトのズーム/パンはイベント抑止で無効化（dragmodeの変更は行わない）
         
         // ツールチップ表示
         if(pointTooltip){
@@ -1574,8 +1573,12 @@
         shiftDragIndex = -1;
         plotDiv.style.cursor = 'default';
         
-        // Plotlyのドラッグモードを復元
-        Plotly.relayout(plotDiv, {'dragmode': 'pan'});
+        // Plotlyのドラッグモードを復元（エラーは握りつぶし）
+        if(window.Plotly && plotDiv){
+          try{
+            Plotly.relayout(plotDiv, {'dragmode': 'pan'}).catch(()=>{});
+          }catch(_){/* noop */}
+        }
       }
     };
     
