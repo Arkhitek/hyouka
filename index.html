@@ -142,47 +142,63 @@
   <script>
     // 設定: 必要に応じてPNGロゴとExcelテンプレートの使用を切替（デフォルトはどちらもfalse）
     window.APP_CONFIG = Object.assign({
-      usePngLogo: false,
-      useExcelTemplate: false
+      usePngLogo: true, // 新ロゴPNGを優先表示
+      useExcelTemplate: false,
+      logoLink: 'https://arkhitek.co.jp/'
     }, window.APP_CONFIG || {});
 
-    // ロゴ: PNGかSVGを動的に読み分け。失敗時はテキストでフォールバック
+    // ロゴ: PNG優先表示＋クリックで公式サイト新規タブ。失敗時SVG→テキスト。
     (function(){
-      var el = document.getElementById('brandLogo');
+      const el = document.getElementById('brandLogo');
       if(!el) return;
-      var usePng = !!(window.APP_CONFIG && window.APP_CONFIG.usePngLogo);
-      var img = new Image();
-      img.className = 'header-logo';
-      img.alt = 'Arkhitek ロゴ';
-      img.onload = function(){ el.textContent=''; el.appendChild(img); console.info('Logo loaded:', img.src); };
-      img.onerror = function(){
-        if(usePng){
-          console.warn('PNG logo not found, falling back to SVG');
-          var img2 = new Image();
-          img2.className = 'header-logo';
-          img2.alt = 'Arkhitek ロゴ';
-          img2.onload = function(){ el.textContent=''; el.appendChild(img2); console.info('Logo loaded (fallback SVG):', img2.src); };
-          img2.onerror = function(){
-            el.textContent='';
-            var span = document.createElement('span');
-            span.textContent = 'ARKHITEK';
-            span.style.fontWeight = 'bold';
-            span.style.fontSize = '20px';
-            el.appendChild(span);
-            console.warn('SVG logo also failed; using text fallback');
-          };
-          img2.src = './logo_arkhitek.svg';
-        } else {
-          el.textContent='';
-          var span = document.createElement('span');
-          span.textContent = 'ARKHITEK';
-          span.style.fontWeight = 'bold';
-          span.style.fontSize = '20px';
-          el.appendChild(span);
-          console.warn('SVG logo failed; using text fallback');
-        }
-      };
-      img.src = usePng ? './arkhitek_logo.png' : './logo_arkhitek.svg';
+      const cfg = window.APP_CONFIG || {};
+      const usePng = !!cfg.usePngLogo;
+      const linkUrl = cfg.logoLink || 'https://arkhitek.co.jp/';
+      function mountImage(src){
+        const a = document.createElement('a');
+        a.href = linkUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        const img = document.createElement('img');
+        img.className = 'header-logo';
+        img.alt = 'Arkhitek ロゴ';
+        img.src = src;
+        a.appendChild(img);
+        el.textContent = '';
+        el.appendChild(a);
+      }
+      function mountTextFallback(){
+        const a = document.createElement('a');
+        a.href = linkUrl; a.target='_blank'; a.rel='noopener noreferrer';
+        const span = document.createElement('span');
+        span.textContent = 'ARKHITEK';
+        span.style.fontWeight = 'bold';
+        span.style.fontSize = '20px';
+        span.style.letterSpacing = '2px';
+        a.appendChild(span);
+        el.textContent='';
+        el.appendChild(a);
+      }
+      // 1段目: PNG
+      if(usePng){
+        const testPng = new Image();
+        testPng.onload = () => { mountImage('./arkhitek_logo.png'); console.info('PNG logo loaded'); };
+        testPng.onerror = () => {
+          console.warn('PNG logo missing. Fallback to SVG');
+          // 2段目: SVG
+          const testSvg = new Image();
+          testSvg.onload = () => { mountImage('./logo_arkhitek.svg'); console.info('SVG logo loaded'); };
+          testSvg.onerror = () => { console.warn('SVG logo also missing. Using text fallback'); mountTextFallback(); };
+          testSvg.src = './logo_arkhitek.svg';
+        };
+        testPng.src = './arkhitek_logo.png';
+        return;
+      }
+      // 直接SVG試行
+      const testSvg = new Image();
+      testSvg.onload = () => { mountImage('./logo_arkhitek.svg'); console.info('SVG logo loaded'); };
+      testSvg.onerror = () => { console.warn('SVG logo missing. Using text fallback'); mountTextFallback(); };
+      testSvg.src = './logo_arkhitek.svg';
     })();
   </script>
 </body>

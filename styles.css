@@ -9,12 +9,19 @@ h1{margin-top:0;color:#2c3e50}
 .header-inner {
 	max-width: 1200px;
 	margin: 0 auto;
+	display: flex;
+	justify-content: flex-end; /* 右寄せ */
+	align-items: center;
 }
 .header-logo {
 	height: 48px;
 	width: auto;
 	display: block;
 }
+.header-logo { transition: opacity .2s ease; }
+.header-logo:hover { opacity: .8; }
+#brandLogo a { text-decoration: none; display: inline-block; }
+#brandLogo a:focus img { outline: 2px solid #8a2c40; outline-offset: 2px; }
 .card{background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,.1);margin-bottom:20px}
 #controls h2{font-size:1.2em;margin-top:0;border-bottom:2px solid #3498db;padding-bottom:5px}
 #plot{min-height:600px}
