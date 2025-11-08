@@ -740,8 +740,7 @@
       },
       hovermode: 'closest',
       showlegend: true,
-      height: 600,
-      dragmode: 'pan'
+      height: 600
     };
 
   Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, {editable: false, displayModeBar: true})
@@ -847,7 +846,8 @@
         });
         
         if(!nearPoint){
-          addEnvelopePoint(xData, yData, editableEnvelope);
+          // 最寄りの包絡線セグメント（2点間）を見つけて中点に追加
+          addEnvelopePointAtNearestSegment(x, y, xData, yData, editableEnvelope, xaxis, yaxis);
         }
         
         e.preventDefault();
@@ -907,7 +907,12 @@
         isDragging = true;
         dragPointIndex = closestIdx;
         plotDiv.style.cursor = 'grabbing';
+        
+        // ドラッグ中はPlotlyのパンを無効化
+        Plotly.relayout(plotDiv, {'dragmode': false});
+        
         e.preventDefault(); // ドラッグ開始時にテキスト選択などを防止
+        e.stopPropagation(); // Plotlyのパンイベントを防止
       }
     }, true); // キャプチャフェーズで先に処理
     
@@ -941,6 +946,9 @@
         dragPointIndex = -1;
         plotDiv.style.cursor = 'default';
         
+        // ドラッグ終了後にパンモードを復元
+        Plotly.relayout(plotDiv, {'dragmode': 'pan'});
+        
         // ドラッグ終了後に再計算
         recalculateFromEnvelope(editableEnvelope);
       }
@@ -951,6 +959,9 @@
         isDragging = false;
         dragPointIndex = -1;
         plotDiv.style.cursor = 'default';
+        
+        // マウスが外れた場合もパンモード復元
+        Plotly.relayout(plotDiv, {'dragmode': 'pan'});
       }
     });
   }
@@ -1010,6 +1021,67 @@
     updateEnvelopePlot(editableEnvelope);
     recalculateFromEnvelope(editableEnvelope);
     appendLog('包絡線点を追加しました（γ=' + gamma.toFixed(6) + ', P=' + load.toFixed(3) + '）');
+  }
+  
+  function addEnvelopePointAtNearestSegment(clickX, clickY, xData, yData, editableEnvelope, xaxis, yaxis){
+    // クリック位置から最も近い包絡線セグメント（2点間）を見つける
+    let minDist = Infinity;
+    let nearestSegmentIdx = 0;
+    
+    for(let i = 0; i < editableEnvelope.length - 1; i++){
+      const p1 = editableEnvelope[i];
+      const p2 = editableEnvelope[i + 1];
+      
+      const x1 = xaxis.c2p(p1.gamma);
+      const y1 = yaxis.c2p(p1.Load);
+      const x2 = xaxis.c2p(p2.gamma);
+      const y2 = yaxis.c2p(p2.Load);
+      
+      // 線分への最短距離を計算
+      const dist = pointToSegmentDistance(clickX, clickY, x1, y1, x2, y2);
+      
+      if(dist < minDist){
+        minDist = dist;
+        nearestSegmentIdx = i;
+      }
+    }
+    
+    // 最寄りセグメントの中点に新しい点を追加
+    const p1 = editableEnvelope[nearestSegmentIdx];
+    const p2 = editableEnvelope[nearestSegmentIdx + 1];
+    const midGamma = (p1.gamma + p2.gamma) / 2;
+    const midLoad = (p1.Load + p2.Load) / 2;
+    
+    editableEnvelope.splice(nearestSegmentIdx + 1, 0, {
+      gamma: midGamma,
+      Load: midLoad,
+      gamma0: midGamma
+    });
+    
+    updateEnvelopePlot(editableEnvelope);
+    recalculateFromEnvelope(editableEnvelope);
+    appendLog('包絡線点を追加しました（γ=' + midGamma.toFixed(6) + ', P=' + midLoad.toFixed(3) + '）');
+  }
+  
+  function pointToSegmentDistance(px, py, x1, y1, x2, y2){
+    // 点(px, py)から線分(x1,y1)-(x2,y2)への最短距離
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lengthSq = dx * dx + dy * dy;
+    
+    if(lengthSq === 0){
+      // 線分が点の場合
+      return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    }
+    
+    // 線分上の最近点のパラメータt (0 <= t <= 1)
+    let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
+    t = Math.max(0, Math.min(1, t));
+    
+    const closestX = x1 + t * dx;
+    const closestY = y1 + t * dy;
+    
+    return Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
   }
   
   function recalculateFromEnvelope(editableEnvelope){
