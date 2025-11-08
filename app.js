@@ -26,7 +26,6 @@
   const clearDataButton = document.getElementById('clearDataButton');
   
   const plotDiv = document.getElementById('plot');
-  const logOutput = document.getElementById('logOutput');
   const pointTooltip = document.getElementById('pointTooltip');
   const undoButton = document.getElementById('undoButton');
   const redoButton = document.getElementById('redoButton');
@@ -89,19 +88,67 @@
     console.debug('[openPointEditDialog] 開始 idx='+idx+' γ='+pt.gamma+' P='+pt.Load);
     
     // キャンセル用に元値保存（ダイアログ開く前に保存）
-    pointEditDialog.dataset.originalGamma = pt.gamma.toString();
-    pointEditDialog.dataset.originalLoad = pt.Load.toString();
+    const originalGamma = pt.gamma;
+    const originalLoad = pt.Load;
+    pointEditDialog.dataset.originalGamma = originalGamma.toString();
+    pointEditDialog.dataset.originalLoad = originalLoad.toString();
     
     editGammaInput.value = pt.gamma.toFixed(4);
     editLoadInput.value = pt.Load.toFixed(1);
-    // ダイアログを初期位置へ（中央）
+    
+    // ダイアログを選択点と重ならない位置に配置
     pointEditDialog.classList.add('custom-position');
     pointEditDialog.style.display = 'flex';
     const content = document.getElementById('pointEditContent');
     if(content){
-      content.style.left = '50%';
-      content.style.top = '120px';
-      content.style.transform = 'translateX(-50%)';
+      // 選択点のスクリーン座標を取得
+      const xaxis = plotDiv._fullLayout.xaxis;
+      const yaxis = plotDiv._fullLayout.yaxis;
+      if(xaxis && yaxis){
+        const pointX = xaxis.c2p(pt.gamma); // プロット内でのX座標（ピクセル）
+        const pointY = yaxis.c2p(pt.Load);  // プロット内でのY座標（ピクセル）
+        const plotRect = plotDiv.getBoundingClientRect();
+        
+        // 画面上の絶対座標
+        const screenX = plotRect.left + pointX;
+        const screenY = plotRect.top + pointY;
+        
+        // ダイアログのサイズ（概算）
+        const dialogWidth = 320;
+        const dialogHeight = 200;
+        
+        // 点が画面左半分にあれば右側に、右半分にあれば左側に表示
+        let left, top;
+        if(screenX < window.innerWidth / 2){
+          // 点が左側 → ダイアログを右側に
+          left = screenX + 40;
+        } else {
+          // 点が右側 → ダイアログを左側に
+          left = screenX - dialogWidth - 40;
+        }
+        
+        // 点が画面上半分にあれば下側に、下半分にあれば上側に
+        if(screenY < window.innerHeight / 2){
+          // 点が上側 → ダイアログを下側に
+          top = screenY + 40;
+        } else {
+          // 点が下側 → ダイアログを上側に
+          top = screenY - dialogHeight - 40;
+        }
+        
+        // 画面外にはみ出さないように調整
+        left = Math.max(10, Math.min(left, window.innerWidth - dialogWidth - 10));
+        top = Math.max(10, Math.min(top, window.innerHeight - dialogHeight - 10));
+        
+        content.style.left = left + 'px';
+        content.style.top = top + 'px';
+        content.style.transform = 'none';
+      } else {
+        // フォールバック: 中央表示
+        content.style.left = '50%';
+        content.style.top = '120px';
+        content.style.transform = 'translateX(-50%)';
+      }
     }
     // 編集中リアルタイム反映
     editGammaInput.oninput = function(){
@@ -117,6 +164,17 @@
         envelopeData[idx].Load = v;
         renderPlot(envelopeData, analysisResults);
       }
+    };
+    
+    // キャンセルボタンのハンドラを上書き（クロージャで現在の値をキャプチャ）
+    cancelPointEditButton.onclick = function(){
+      if(idx >= 0 && envelopeData && envelopeData[idx]){
+        envelopeData[idx].gamma = originalGamma;
+        envelopeData[idx].Load = originalLoad;
+        console.debug('[キャンセル] 元値に復元: γ='+originalGamma+' P='+originalLoad);
+        renderPlot(envelopeData, analysisResults);
+      }
+      closePointEditDialog();
     };
   }
 
@@ -135,22 +193,9 @@
     recalculateFromEnvelope(envelopeData);
     closePointEditDialog();
   }
-  // キャンセル拡張: 元に戻す
-  if(cancelPointEditButton){
-    cancelPointEditButton.onclick = function(){
-      if(window._selectedEnvelopePoint >= 0 && envelopeData){
-        const og = parseFloat(pointEditDialog.dataset.originalGamma);
-        const ol = parseFloat(pointEditDialog.dataset.originalLoad);
-        if(!isNaN(og) && !isNaN(ol)){
-          envelopeData[window._selectedEnvelopePoint].gamma = og;
-          envelopeData[window._selectedEnvelopePoint].Load = ol;
-          console.debug('[キャンセル] 元値に復元: γ='+og+' P='+ol);
-          renderPlot(envelopeData, analysisResults);
-        }
-      }
-      closePointEditDialog();
-    };
-  }
+  
+  // キャンセルボタンのハンドラは openPointEditDialog 内で動的に設定されるため、ここでは不要
+  
   // 削除ボタン
   const deletePointEditButton = document.getElementById('deletePointEdit');
   if(deletePointEditButton){
@@ -337,7 +382,6 @@
   historyStack = [];
   redoStack = [];
     plotDiv.innerHTML = '';
-    if(logOutput) logOutput.textContent = '';
     // 結果表示リセット
     ['val_pmax','val_py','val_dy','val_K','val_pu','val_du','val_mu','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
       const el = document.getElementById(id); if(el) el.textContent='-';
@@ -1402,8 +1446,7 @@
   }
 
   function appendLog(message){
-    if(!logOutput) return;
-    const time = new Date().toISOString();
-    logOutput.textContent += `[${time}] ${message}\n`;
+    // ログ機能は無効化（コンソールのみに出力）
+    console.log('[LOG]', message);
   }
 })();

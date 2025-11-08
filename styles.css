@@ -53,6 +53,8 @@ button.edit-mode.active:hover{background:#c0392b}
 .divider::before{left:0}
 .divider::after{right:0}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.center-button{display:flex;justify-content:center;margin-top:10px}
+.center-button button{width:auto;max-width:400px}
 table{width:100%;border-collapse:collapse;margin-top:10px;font-size:0.95em}
 table th,table td{border:1px solid #ddd;padding:10px;text-align:left}
 table th{background:#ecf0f1;font-weight:700}

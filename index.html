@@ -97,7 +97,7 @@
       </div>
     </div>
 
-    <div class="row">
+    <div class="center-button">
       <button id="downloadExcelButton" class="download" disabled>結果Excelダウンロード</button>
     </div>
   </div>
@@ -115,7 +115,7 @@
       <label>荷重 P (kN): <input type="number" id="edit_load" step="0.1" /></label>
       <div class="modal-actions">
         <button id="addPointEdit" class="add">点を追加</button>
-        <button id="deletePointEdit" class="danger">選択点を削除</button>
+        <button id="deletePointEdit" class="danger">削除</button>
         <button id="applyPointEdit">適用</button>
         <button id="cancelPointEdit">キャンセル</button>
       </div>
@@ -156,11 +156,6 @@
         <tr class="highlight final"><td>壁倍率 = Pa/(L×1.96)</td><td id="val_magnification">-</td></tr>
       </tbody>
     </table>
-  </div>
-
-  <div id="logs" class="card">
-    <h2>ログ</h2>
-    <pre id="logOutput" style="max-height:200px; overflow:auto; background:#f9f9f9; padding:8px; border:1px solid #ddd;"></pre>
   </div>
 
   <script src="app.js"></script>
