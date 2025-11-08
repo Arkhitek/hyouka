@@ -1494,8 +1494,8 @@
         }
       });
       
-      // 20px以内なら包絡線点と判定
-      if(minDist < 20 && nearestIdx >= 0){
+      // 30px以内なら包絡線点と判定（ヒット領域を少し広げる）
+      if(minDist < 30 && nearestIdx >= 0){
         // Plotlyのデフォルトドラッグを無効化（先に実行）
         e.stopImmediatePropagation();
         e.preventDefault();
@@ -1578,11 +1578,31 @@
     };
     
     // イベントリスナー登録（キャプチャフェーズで先にイベントを取得）
-    const plotlyLayer = plotDiv.querySelector('.plotly') || plotDiv;
-    plotlyLayer.addEventListener('mousedown', mousedownHandler, true); // キャプチャフェーズ
-    document.addEventListener('mousemove', mousemoveHandler); // グローバルに監視
+    const dragLayer = plotDiv.querySelector('.draglayer') || plotDiv;
+    // マウスイベント
+    dragLayer.addEventListener('mousedown', mousedownHandler, true);
+    document.addEventListener('mousemove', mousemoveHandler);
     document.addEventListener('mouseup', mouseupHandler);
     document.addEventListener('mouseleave', mouseupHandler);
+    // ポインタイベント（Zoom優先を抑止するため早期にハンドリング）
+    const pointerdownHandler = function(e){
+      if(e && (e.pointerType === 'mouse' || e.pointerType === 'pen')){
+        mousedownHandler(e);
+      }
+    };
+    const pointermoveHandler = function(e){
+      if(e && (e.pointerType === 'mouse' || e.pointerType === 'pen')){
+        mousemoveHandler(e);
+      }
+    };
+    const pointerupHandler = function(e){
+      if(e && (e.pointerType === 'mouse' || e.pointerType === 'pen')){
+        mouseupHandler(e);
+      }
+    };
+    dragLayer.addEventListener('pointerdown', pointerdownHandler, true);
+    document.addEventListener('pointermove', pointermoveHandler, true);
+    document.addEventListener('pointerup', pointerupHandler, true);
   }
   
   function highlightSelectedPoint(editableEnvelope){
