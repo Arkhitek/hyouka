@@ -26,6 +26,7 @@
   const c0_factor = document.getElementById('c0_factor');
   const wall_preset = document.getElementById('wall_preset');
   const envelope_side = document.getElementById('envelope_side');
+  const specimen_name = document.getElementById('specimen_name');
   // 手動解析ボタンは廃止
   const processButton = null;
   const downloadExcelButton = document.getElementById('downloadExcelButton');
@@ -448,6 +449,7 @@
       if(!analysisResults || !envelopeData || !envelopeData.length){
         alert('解析結果がありません');
         return;
+      const specimen = (specimen_name && specimen_name.value ? specimen_name.value.trim() : 'testname');
       }
       // Ensure jsPDF and html2canvas
       const { jsPDF } = window.jspdf || {};
@@ -472,6 +474,7 @@
         <div style="text-align:center; margin-bottom:15px;">
           <h1 style="font-size:24px; margin:10px 0;">耐力壁性能評価レポート</h1>
           <p style="font-size:12px; color:#666; margin:5px 0;">生成日時: ${new Date().toISOString().replace('T',' ').substring(0,19)}</p>
+          <p style="font-size:12px; color:#333; margin:5px 0;">試験体名称: ${specimen.replace(/</g,'&lt;')}</p>
         </div>
         <div id="pdf-plot" style="width:100%; height:400px; margin-bottom:20px;"></div>
         <div style="display:flex; gap:20px;">
@@ -2083,6 +2086,7 @@
       return;
     }
     try{
+      const specimen = (specimen_name && specimen_name.value ? specimen_name.value.trim() : 'testname');
       let wb = null;
       // ネイティブチャート対応: 明示的に有効化された場合のみ template.xlsx を読み込み
       if(window.APP_CONFIG && window.APP_CONFIG.useExcelTemplate){
@@ -2188,7 +2192,8 @@
       const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'Results.xlsx';
+  const excelFileName = `Results_${specimen.replace(/[^a-zA-Z0-9_\-一-龥ぁ-んァ-ヶ]/g,'_')}.xlsx`;
+  a.download = excelFileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
