@@ -1440,13 +1440,138 @@
     _keydownHandler = handleKeydown;
     document.addEventListener('keydown', _keydownHandler);
     
-    // ドラッグ操作は削除（仕様変更）
+    // Shift + ドラッグで包絡線点の座標を変更
+    let shiftDragging = false;
+    let shiftDragIndex = -1;
+    let shiftDragStartX = 0;
+    let shiftDragStartY = 0;
     
-    // マウス移動でドラッグ
-    // moveイベントによるドラッグ処理は削除
+    plotDiv.on('plotly_hover', function(data){
+      if(!data.points || data.points.length === 0) return;
+      const pt = data.points[0];
+      // 包絡線点（curveNumber === 2）にホバー時、カーソルをポインタに
+      if(pt.curveNumber === 2){
+        plotDiv.style.cursor = 'pointer';
+      } else {
+        plotDiv.style.cursor = 'default';
+      }
+    });
     
-    // マウスアップでドラッグ終了
-    // ドラッグ終了/離脱処理も不要
+    plotDiv.on('plotly_unhover', function(){
+      if(!shiftDragging){
+        plotDiv.style.cursor = 'default';
+      }
+    });
+    
+    // マウスダウン: Shiftキー押下中かつ包絡線点上ならドラッグ開始
+    let mousedownHandler = function(e){
+      if(!e.shiftKey) return;
+      // Plotlyのイベントから最寄りの点を取得
+      const xaxis = plotDiv._fullLayout.xaxis;
+      const yaxis = plotDiv._fullLayout.yaxis;
+      if(!xaxis || !yaxis) return;
+      
+      const bbox = plotDiv.getBoundingClientRect();
+      const clickX = e.clientX - bbox.left;
+      const clickY = e.clientY - bbox.top;
+      
+      // クリック位置をデータ座標に変換
+      const dataX = xaxis.p2c(clickX);
+      const dataY = yaxis.p2c(clickY);
+      
+      // 包絡線点との距離を計算して最寄り点を検索
+      let minDist = Infinity;
+      let nearestIdx = -1;
+      editableEnvelope.forEach((pt, idx) => {
+        const px = xaxis.c2p(pt.gamma);
+        const py = yaxis.c2p(pt.Load);
+        const dist = Math.sqrt((clickX - px)**2 + (clickY - py)**2);
+        if(dist < minDist){
+          minDist = dist;
+          nearestIdx = idx;
+        }
+      });
+      
+      // 20px以内なら包絡線点と判定
+      if(minDist < 20 && nearestIdx >= 0){
+        shiftDragging = true;
+        shiftDragIndex = nearestIdx;
+        shiftDragStartX = clickX;
+        shiftDragStartY = clickY;
+        plotDiv.style.cursor = 'move';
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // ツールチップ表示
+        if(pointTooltip){
+          const pt = editableEnvelope[nearestIdx];
+          pointTooltip.textContent = `γ: ${pt.gamma.toFixed(6)}, P: ${pt.Load.toFixed(3)}`;
+          pointTooltip.style.left = e.clientX + 10 + 'px';
+          pointTooltip.style.top = e.clientY + 10 + 'px';
+          pointTooltip.style.display = 'block';
+        }
+      }
+    };
+    
+    // マウスムーブ: ドラッグ中なら座標更新
+    let mousemoveHandler = function(e){
+      if(!shiftDragging || shiftDragIndex < 0) return;
+      
+      const xaxis = plotDiv._fullLayout.xaxis;
+      const yaxis = plotDiv._fullLayout.yaxis;
+      if(!xaxis || !yaxis) return;
+      
+      const bbox = plotDiv.getBoundingClientRect();
+      const moveX = e.clientX - bbox.left;
+      const moveY = e.clientY - bbox.top;
+      
+      // データ座標に変換
+      const newGamma = xaxis.p2c(moveX);
+      const newLoad = yaxis.p2c(moveY);
+      
+      // 包絡線点を更新
+      editableEnvelope[shiftDragIndex].gamma = newGamma;
+      editableEnvelope[shiftDragIndex].Load = newLoad;
+      
+      // プロット更新
+      updateEnvelopePlot(editableEnvelope);
+      
+      // ツールチップ更新
+      if(pointTooltip){
+        pointTooltip.textContent = `γ: ${newGamma.toFixed(6)}, P: ${newLoad.toFixed(3)}`;
+        pointTooltip.style.left = e.clientX + 10 + 'px';
+        pointTooltip.style.top = e.clientY + 10 + 'px';
+      }
+      
+      e.preventDefault();
+    };
+    
+    // マウスアップ: ドラッグ終了
+    let mouseupHandler = function(e){
+      if(shiftDragging && shiftDragIndex >= 0){
+        // 履歴に保存
+        pushHistory(editableEnvelope);
+        
+        // 再計算
+        recalculateFromEnvelope(editableEnvelope);
+        appendLog(`包絡線点 #${shiftDragIndex} をドラッグ移動しました`);
+        
+        // ツールチップ非表示
+        if(pointTooltip){
+          pointTooltip.style.display = 'none';
+        }
+        
+        shiftDragging = false;
+        shiftDragIndex = -1;
+        plotDiv.style.cursor = 'default';
+      }
+    };
+    
+    // イベントリスナー登録
+    plotDiv.addEventListener('mousedown', mousedownHandler);
+    plotDiv.addEventListener('mousemove', mousemoveHandler);
+    plotDiv.addEventListener('mouseup', mouseupHandler);
+    plotDiv.addEventListener('mouseleave', mouseupHandler);
   }
   
   function highlightSelectedPoint(editableEnvelope){
