@@ -46,7 +46,17 @@
     <div class="guide-content">
       <div class="guide-section">
   <h3>1️⃣ データ入力</h3>
-  <p>変形角γ(rad)と荷重P(kN)を1行1データで入力・貼り付けすると<strong>自動で解析が実行</strong>されます</p>
+  <p>
+    変形角 γ(rad) と 荷重 P(kN) を <strong>1行1データ</strong>で入力・貼り付けすると、
+    <strong>自動で解析</strong>が実行されます。<br/>
+    「対象耐力壁」を選択すると <strong>特定変形・最大終局変位・C0</strong> が即時に反映されます。<br/>
+    「評価対象包絡線（正/負）」も必要に応じて選択してください。
+  </p>
+  <ul>
+    <li>γ と P は<strong>同じ行数</strong>で入力してください（数値以外の行は無視）</li>
+    <li>CSV の貼り付けに対応しています（列ごとにそれぞれの欄へ）</li>
+    <li>入力・選択の変更は<strong>短い待ち時間後に自動解析</strong>されます</li>
+  </ul>
       </div>
       <div class="guide-section">
         <h3>2️⃣ 包絡線の編集</h3>
@@ -57,11 +67,19 @@
           <li><strong>削除</strong>：選択点を削除（最低2点は残ります）</li>
           <li><strong>適用</strong>：変更を確定（元に戻す/やり直しが可能）</li>
           <li><strong>キャンセル</strong>：変更を破棄して元の値に戻す</li>
+          <li><strong>表示/操作</strong>：ダイアログは<strong>画面右端</strong>に表示。ヘッダーのドラッグで移動可能</li>
+          <li><strong>Undo/Redo</strong>：編集履歴に対して<strong>Undo/Redo</strong>ボタンが使えます</li>
         </ul>
       </div>
       <div class="guide-section">
         <h3>3️⃣ 結果確認</h3>
-        <p>壁倍率・特性値を表で確認し、「結果をExcelダウンロード」で保存</p>
+        <p>
+          壁倍率・特性値は表で確認できます。<br/>
+          変位（δy・δv・δu）は<strong>1/◯ 形式</strong>で表示されます。<br/>
+          最終評価には <strong>Pa (kN/m)</strong> と <strong>Pu (kN/m)</strong> も併記します。<br/>
+          保存は <strong>結果Excelダウンロード</strong> と <strong>結果レポート作成(PDF)</strong> が利用可能（PDFは1ページ出力）。
+          これらのボタンは<strong>解析成功後に有効化</strong>されます。
+        </p>
       </div>
     </div>
   </div>
