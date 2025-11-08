@@ -648,6 +648,55 @@
     }
   }
 
+  // グローバル: Plotly.relayout をモンキーパッチしてあらゆる呼び出しの不正値を抑止しスタックを収集
+  (function patchGlobalRelayout(){
+    try{
+      if(!window.Plotly) return;
+      if(window.__PLOTLY_RELAYOUT_PATCHED__) return;
+      const origRelayout = window.Plotly.relayout;
+      if(typeof origRelayout !== 'function') return;
+      window.Plotly.relayout = function patchedRelayout(gd, a, b){
+        try{
+          // 文字列キー指定のときは値が未指定なら無視
+          if(typeof a === 'string'){
+            if(typeof b === 'undefined'){
+              console.warn('[patch.relayout] string key without value. ignore:', a);
+              return Promise.resolve();
+            }
+            const pr = origRelayout.call(window.Plotly, gd, a, b);
+            return (pr && typeof pr.then === 'function') ? pr.catch(err => {
+              console.warn('[patch.relayout] rejected (string key):', a, b, err);
+            }) : Promise.resolve();
+          }
+          // オブジェクト以外は無視（undefined reject を回避）
+          if(!a || typeof a !== 'object' || Array.isArray(a)){
+            console.warn('[patch.relayout] invalid updates (expect plain object). got =', a);
+            return Promise.resolve();
+          }
+          const pr = origRelayout.call(window.Plotly, gd, a);
+          return (pr && typeof pr.then === 'function') ? pr.catch(err => {
+            console.warn('[patch.relayout] rejected (object updates):', a, err);
+          }) : Promise.resolve();
+        }catch(err){
+          console.warn('[patch.relayout] unexpected error', err);
+          return Promise.resolve();
+        }
+      };
+      window.__PLOTLY_RELAYOUT_PATCHED__ = true;
+      // 未処理拒否の既定ログを抑制（理由 undefined のみ）
+      window.addEventListener('unhandledrejection', function(ev){
+        try{
+          if(!ev) return;
+          if(ev.reason === undefined){
+            console.warn('[unhandledrejection] suppressed undefined reason from a promise');
+            ev.preventDefault();
+          }
+        }catch(_){/* noop */}
+      });
+      console.info('[patch.relayout] installed');
+    }catch(err){ console.warn('patchGlobalRelayout failed', err); }
+  })();
+
   // 包絡線範囲へフィット（初期描画・Autoscaleボタン・ダブルクリックで共通使用）
   function fitEnvelopeRanges(reason){
     try{
