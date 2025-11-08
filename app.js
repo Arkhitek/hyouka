@@ -668,7 +668,12 @@
       y: editableEnvelope.map(pt => pt.Load),
       mode: 'markers',
       name: '包絡線点 (ドラッグ移動可)',
-      marker: {color: 'blue', size: 10, symbol: 'circle', line: {color: 'white', width: 2}},
+      marker: {
+        color: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 'red' : 'blue'),
+        size: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 14 : 10),
+        symbol: 'circle', 
+        line: {color: 'white', width: 2}
+      },
       hovertemplate: '<b>変形角:</b> %{x:.6f}<br><b>荷重:</b> %{y:.3f}<br><i>ドラッグで移動、Delキーで削除</i><extra></extra>'
     };
 
@@ -739,7 +744,7 @@
       dragmode: 'pan'
     };
 
-  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, {editable: false})
+  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, {editable: false, displayModeBar: true})
     .then(function(){
       // 包絡線点の編集機能を実装
       setupEnvelopeEditing(editableEnvelope);
@@ -775,8 +780,9 @@
     let isDragging = false;
     let dragPointIndex = -1;
     let selectedPointIndex = -1; // Del キー用の選択状態
+    window._selectedEnvelopePoint = -1; // グローバルで選択状態を保持
     
-    // 包絡線点のクリック・ダブルクリック処理
+    // 包絡線点のクリック処理
     plotDiv.on('plotly_click', function(data){
       if(!data.points || data.points.length === 0) return;
       const pt = data.points[0];
@@ -785,50 +791,90 @@
       if(pt.curveNumber === 2){
         // シングルクリック：点を選択（Del用）
         selectedPointIndex = pt.pointIndex;
+        window._selectedEnvelopePoint = pt.pointIndex;
         console.info('包絡線点 ' + selectedPointIndex + ' を選択（Delキーで削除可能）');
+        
+        // 選択状態を視覚的に反映
+        highlightSelectedPoint(editableEnvelope);
         return;
       }
       
       // 他のトレースをクリック：選択解除
       selectedPointIndex = -1;
+      window._selectedEnvelopePoint = -1;
+      highlightSelectedPoint(editableEnvelope);
     });
     
-    // ダブルクリックで新規点追加
+    // Plotlyのデフォルトダブルクリックを無効化
     plotDiv.on('plotly_doubleclick', function(){
-      // デフォルトのズームリセットを無効化して、代わりに点追加処理へ
-      return false; // prevent default zoom reset
+      return false; // prevent default
     });
     
-    // ダブルクリック時に座標を取得して点追加
-    plotDiv.addEventListener('dblclick', function(e){
-      const bb = plotDiv.getBoundingClientRect();
-      const x = e.clientX - bb.left;
-      const y = e.clientY - bb.top;
+    // ダブルクリックで新規点追加（Plotlyイベントの外で処理）
+    let clickTimer = null;
+    let clickCount = 0;
+    
+    plotDiv.addEventListener('mousedown', function(e){
+      clickCount++;
       
-      const xaxis = plotDiv._fullLayout.xaxis;
-      const yaxis = plotDiv._fullLayout.yaxis;
-      if(!xaxis || !yaxis) return;
-      
-      const xData = xaxis.p2c(x);
-      const yData = yaxis.p2c(y);
-      
-      addEnvelopePoint(xData, yData, editableEnvelope);
-      e.preventDefault();
-      e.stopPropagation();
+      if(clickCount === 1){
+        clickTimer = setTimeout(function(){
+          clickCount = 0;
+        }, 300);
+      } else if(clickCount === 2){
+        clearTimeout(clickTimer);
+        clickCount = 0;
+        
+        // ダブルクリック処理
+        const bb = plotDiv.getBoundingClientRect();
+        const x = e.clientX - bb.left;
+        const y = e.clientY - bb.top;
+        
+        const xaxis = plotDiv._fullLayout.xaxis;
+        const yaxis = plotDiv._fullLayout.yaxis;
+        if(!xaxis || !yaxis) return;
+        
+        const xData = xaxis.p2c(x);
+        const yData = yaxis.p2c(y);
+        
+        // 点の近くでダブルクリックした場合は追加しない（ドラッグ開始と誤認防止）
+        let nearPoint = false;
+        editableEnvelope.forEach((pt, idx) => {
+          const xPx = xaxis.c2p(pt.gamma);
+          const yPx = yaxis.c2p(pt.Load);
+          const dist = Math.sqrt(Math.pow(xPx - x, 2) + Math.pow(yPx - y, 2));
+          if(dist < 15) nearPoint = true;
+        });
+        
+        if(!nearPoint){
+          addEnvelopePoint(xData, yData, editableEnvelope);
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+      }
     });
     
     // Delキーで選択中の点を削除
-    document.addEventListener('keydown', function(e){
+    const handleKeydown = function(e){
       if(e.key === 'Delete' || e.key === 'Del'){
         if(selectedPointIndex >= 0 && selectedPointIndex < editableEnvelope.length){
           deleteEnvelopePoint(selectedPointIndex, editableEnvelope);
           selectedPointIndex = -1;
+          window._selectedEnvelopePoint = -1;
         }
       }
-    });
+    };
+    
+    // 既存のリスナーを削除してから追加（重複防止）
+    document.removeEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', handleKeydown);
     
     // マウスダウンで包絡線点をつかむ
     plotDiv.addEventListener('mousedown', function(e){
+      // ダブルクリック処理と競合しないように、シングルクリック時のみドラッグ開始
+      if(e.detail > 1) return; // ダブルクリック以上は無視
+      
       const bb = plotDiv.getBoundingClientRect();
       const x = e.clientX - bb.left;
       const y = e.clientY - bb.top;
@@ -861,8 +907,9 @@
         isDragging = true;
         dragPointIndex = closestIdx;
         plotDiv.style.cursor = 'grabbing';
+        e.preventDefault(); // ドラッグ開始時にテキスト選択などを防止
       }
-    });
+    }, true); // キャプチャフェーズで先に処理
     
     // マウス移動でドラッグ
     plotDiv.addEventListener('mousemove', function(e){
@@ -908,6 +955,17 @@
     });
   }
   
+  function highlightSelectedPoint(editableEnvelope){
+    // 選択された点を赤色で強調表示
+    const colors = editableEnvelope.map((pt, idx) => idx === window._selectedEnvelopePoint ? 'red' : 'blue');
+    const sizes = editableEnvelope.map((pt, idx) => idx === window._selectedEnvelopePoint ? 14 : 10);
+    
+    Plotly.restyle(plotDiv, {
+      'marker.color': [colors],
+      'marker.size': [sizes]
+    }, [2]); // trace 2: 包絡線点
+  }
+  
   function updateEnvelopePlot(editableEnvelope){
     // 包絡線トレース（trace 1）と包絡線点トレース（trace 2）を更新
     Plotly.restyle(plotDiv, {
@@ -915,9 +973,14 @@
       y: [editableEnvelope.map(pt => pt.Load)]
     }, [1]); // trace 1: 包絡線
     
+    const colors = editableEnvelope.map((pt, idx) => idx === window._selectedEnvelopePoint ? 'red' : 'blue');
+    const sizes = editableEnvelope.map((pt, idx) => idx === window._selectedEnvelopePoint ? 14 : 10);
+    
     Plotly.restyle(plotDiv, {
       x: [editableEnvelope.map(pt => pt.gamma)],
-      y: [editableEnvelope.map(pt => pt.Load)]
+      y: [editableEnvelope.map(pt => pt.Load)],
+      'marker.color': [colors],
+      'marker.size': [sizes]
     }, [2]); // trace 2: 包絡線点
   }
   
@@ -927,6 +990,7 @@
       return;
     }
     editableEnvelope.splice(pointIndex, 1);
+    window._selectedEnvelopePoint = -1; // 選択解除
     updateEnvelopePlot(editableEnvelope);
     recalculateFromEnvelope(editableEnvelope);
     appendLog('包絡線点を削除しました（残り' + editableEnvelope.length + '点）');
