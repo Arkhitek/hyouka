@@ -87,8 +87,13 @@
     const idx = window._selectedEnvelopePoint;
     const pt = envelopeData[idx];
     console.debug('[openPointEditDialog] 開始 idx='+idx+' γ='+pt.gamma+' P='+pt.Load);
-    editGammaInput.value = pt.gamma.toFixed(6);
-    editLoadInput.value = pt.Load.toFixed(4);
+    
+    // キャンセル用に元値保存（ダイアログ開く前に保存）
+    pointEditDialog.dataset.originalGamma = pt.gamma.toString();
+    pointEditDialog.dataset.originalLoad = pt.Load.toString();
+    
+    editGammaInput.value = pt.gamma.toFixed(4);
+    editLoadInput.value = pt.Load.toFixed(1);
     // ダイアログを初期位置へ（中央）
     pointEditDialog.classList.add('custom-position');
     pointEditDialog.style.display = 'flex';
@@ -113,9 +118,6 @@
         renderPlot(envelopeData, analysisResults);
       }
     };
-    // キャンセル用に元値保存
-    pointEditDialog.dataset.originalGamma = pt.gamma;
-    pointEditDialog.dataset.originalLoad = pt.Load;
   }
 
   function closePointEditDialog(){ pointEditDialog.style.display = 'none'; }
@@ -136,12 +138,15 @@
   // キャンセル拡張: 元に戻す
   if(cancelPointEditButton){
     cancelPointEditButton.onclick = function(){
-      if(pointEditDialog.dataset.originalGamma && pointEditDialog.dataset.originalLoad && window._selectedEnvelopePoint >= 0){
+      if(window._selectedEnvelopePoint >= 0 && envelopeData){
         const og = parseFloat(pointEditDialog.dataset.originalGamma);
         const ol = parseFloat(pointEditDialog.dataset.originalLoad);
-        envelopeData[window._selectedEnvelopePoint].gamma = og;
-        envelopeData[window._selectedEnvelopePoint].Load = ol;
-        renderPlot(envelopeData, analysisResults);
+        if(!isNaN(og) && !isNaN(ol)){
+          envelopeData[window._selectedEnvelopePoint].gamma = og;
+          envelopeData[window._selectedEnvelopePoint].Load = ol;
+          console.debug('[キャンセル] 元値に復元: γ='+og+' P='+ol);
+          renderPlot(envelopeData, analysisResults);
+        }
       }
       closePointEditDialog();
     };
@@ -155,6 +160,47 @@
         window._selectedEnvelopePoint = -1;
         renderPlot(envelopeData, analysisResults);
         closePointEditDialog();
+      }
+    };
+  }
+  // 追加ボタン
+  const addPointEditButton = document.getElementById('addPointEdit');
+  if(addPointEditButton){
+    addPointEditButton.onclick = function(){
+      if(window._selectedEnvelopePoint >= 0 && envelopeData){
+        const idx = window._selectedEnvelopePoint;
+        if(idx >= envelopeData.length - 1){
+          alert('最後の点の次には追加できません。');
+          return;
+        }
+        // 選択点と次の点の中間値を計算
+        const pt1 = envelopeData[idx];
+        const pt2 = envelopeData[idx + 1];
+        const midGamma = (pt1.gamma + pt2.gamma) / 2;
+        const midLoad = (pt1.Load + pt2.Load) / 2;
+        
+        // 履歴に保存
+        pushHistory(envelopeData);
+        
+        // 新しい点を挿入
+        envelopeData.splice(idx + 1, 0, {
+          gamma: midGamma,
+          Load: midLoad,
+          gamma0: midGamma
+        });
+        
+        appendLog('包絡線点を追加しました（γ=' + midGamma.toFixed(6) + ', P=' + midLoad.toFixed(3) + '）');
+        renderPlot(envelopeData, analysisResults);
+        recalculateFromEnvelope(envelopeData);
+        
+        // 新しく追加した点を選択
+        window._selectedEnvelopePoint = idx + 1;
+        
+        // ダイアログを閉じて新しい点のダイアログを開く
+        closePointEditDialog();
+        setTimeout(function(){
+          openPointEditDialog();
+        }, 100);
       }
     };
   }
@@ -925,6 +971,7 @@
             const keys = e ? Object.keys(e) : [];
             const triggeredAuto = keys.some(k => /autorange$/.test(k) && e[k] === true);
             if(triggeredAuto && envelopeData && envelopeData.length){
+              console.info('[Autoscale] 包絡線範囲へフィッティング');
               const r = computeEnvelopeRanges(envelopeData);
               Plotly.relayout(plotDiv, {
                 'xaxis.autorange': false,
@@ -939,6 +986,7 @@
         plotDiv.on('plotly_doubleclick', function(){
           try{
             if(envelopeData && envelopeData.length){
+              console.info('[ダブルクリック] 包絡線範囲へリセット');
               const r = computeEnvelopeRanges(envelopeData);
               Plotly.relayout(plotDiv, {
                 'xaxis.autorange': false,
@@ -977,8 +1025,21 @@
         window._selectedEnvelopePoint = pt.pointIndex;
         // 視覚的に選択反映
         highlightSelectedPoint(editableEnvelope);
-        // ダイアログを開く
-        openPointEditDialog();
+        
+        // 解析未実行時のフォールバック: envelopeData が存在しなければ自動解析
+        if(!envelopeData && rawData && rawData.length >= 3){
+          console.info('[plotly_click] 解析前クリック検出 → 自動解析実行');
+          processDataDirect(); // 自動解析
+          // 解析後に再選択してダイアログ開く（非同期対応）
+          setTimeout(function(){
+            if(envelopeData && window._selectedEnvelopePoint >= 0){
+              openPointEditDialog();
+            }
+          }, 100);
+        } else {
+          // ダイアログを開く
+          openPointEditDialog();
+        }
         console.debug('[plotly_click] ダイアログ表示要求');
         return;
       }

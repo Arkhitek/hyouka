@@ -42,6 +42,8 @@ button.edit-mode.active{background:#e74c3c;font-weight:bold}
 button.edit-mode.active:hover{background:#c0392b}
 .modal-actions button.danger{background:#e74c3c;color:#fff}
 .modal-actions button.danger:hover{background:#c0392b}
+.modal-actions button.add{background:#27ae60;color:#fff}
+.modal-actions button.add:hover{background:#229954}
 
 /* Draggable modal custom positioning */
 #pointEditDialog.custom-position .modal-content{position:absolute;}
@@ -78,11 +80,12 @@ h3{color:#2c3e50;border-left:4px solid #3498db;padding-left:10px;margin-top:20px
 .modal{
 	position:fixed;
 	top:0;left:0;right:0;bottom:0;
-	background:rgba(0,0,0,0.35);
+	background:transparent;
 	display:flex;
 	align-items:center;
 	justify-content:center;
 	z-index:1500;
+	pointer-events:none;
 }
 .modal-content{
 	background:#fff;
@@ -91,6 +94,7 @@ h3{color:#2c3e50;border-left:4px solid #3498db;padding-left:10px;margin-top:20px
 	border-radius:8px;
 	box-shadow:0 4px 12px rgba(0,0,0,0.25);
 	font-size:14px;
+	pointer-events:auto;
 }
 .modal-content h3{margin-top:0;font-size:1.05em;border:none;padding:0;color:#2c3e50}
 .modal-content label{display:block;margin-bottom:10px;font-weight:600}

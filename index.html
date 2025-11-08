@@ -111,9 +111,10 @@
       <div class="modal-header drag-handle" style="cursor:move; user-select:none;">
         <h3 style="margin:0;">点の座標を編集</h3>
       </div>
-      <label>変形角 γ (rad): <input type="number" id="edit_gamma" step="0.000001" /></label>
-      <label>荷重 P (kN): <input type="number" id="edit_load" step="0.0001" /></label>
+      <label>変形角 γ (rad): <input type="number" id="edit_gamma" step="0.0001" /></label>
+      <label>荷重 P (kN): <input type="number" id="edit_load" step="0.1" /></label>
       <div class="modal-actions">
+        <button id="addPointEdit" class="add">点を追加</button>
         <button id="deletePointEdit" class="danger">選択点を削除</button>
         <button id="applyPointEdit">適用</button>
         <button id="cancelPointEdit">キャンセル</button>
