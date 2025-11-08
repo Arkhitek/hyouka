@@ -26,7 +26,8 @@
   const c0_factor = document.getElementById('c0_factor');
   const wall_preset = document.getElementById('wall_preset');
   const envelope_side = document.getElementById('envelope_side');
-  const processButton = document.getElementById('processButton');
+  // 手動解析ボタンは廃止
+  const processButton = null;
   const downloadExcelButton = document.getElementById('downloadExcelButton');
   const generatePdfButton = document.getElementById('generatePdfButton');
   const clearDataButton = document.getElementById('clearDataButton');
@@ -82,7 +83,18 @@
   if(wall_preset){
     wall_preset.addEventListener('change', e => {
       applyWallPreset(e.target.value);
+      // プリセット変更時も自動解析
+      if(rawData && rawData.length >= 3){ scheduleAutoRun(); }
     });
+  }
+
+  // 自動解析スケジューラ（タイプ中の過剰実行を防止）
+  let _autoRunTimer = null;
+  function scheduleAutoRun(delay=150){
+    if(_autoRunTimer) clearTimeout(_autoRunTimer);
+    _autoRunTimer = setTimeout(() => {
+      try{ processDataDirect(); }catch(e){ console.warn('auto-run error', e); }
+    }, delay);
   }
 
   function pushHistory(current){
@@ -385,7 +397,18 @@
   // === Events ===
   gammaInput.addEventListener('input', handleDirectInput);
   loadInput.addEventListener('input', handleDirectInput);
-  processButton.addEventListener('click', processData);
+  // 手動ボタン削除済み: processButton クリックイベント不要
+
+  // パラメータ変更時の自動解析
+  const autoInputs = [wall_length_m, specific_deformation, alpha_factor, max_ultimate_deformation, c0_factor];
+  autoInputs.forEach(el => {
+    if(!el) return;
+    el.addEventListener('input', () => { if(rawData && rawData.length>=3) scheduleAutoRun(); });
+    el.addEventListener('change', () => { if(rawData && rawData.length>=3) scheduleAutoRun(); });
+  });
+  if(envelope_side){
+    envelope_side.addEventListener('change', () => { if(rawData && rawData.length>=3) scheduleAutoRun(); });
+  }
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
   if(generatePdfButton) generatePdfButton.addEventListener('click', generatePdfReport);
   clearDataButton.addEventListener('click', clearInputData);
@@ -404,7 +427,7 @@
     envelopeData = null;
     analysisResults = {};
     
-  processButton.disabled = true;
+  // 自動解析化に伴い、旧ボタンの状態管理は不要
   if(downloadExcelButton) downloadExcelButton.disabled = true;
   if(generatePdfButton) generatePdfButton.disabled = true;
     if(undoButton) undoButton.disabled = true;
@@ -657,7 +680,7 @@
 
       rawData = parsed;
       header = ['Load', 'gamma', 'gamma0'];
-      processButton.disabled = false;
+  // 自動解析: 旧ボタン無効化不要
 
       if(skipped > 0){
         console.info(`非数値または空白行を ${skipped} 行スキップしました。有効データ: ${parsed.length} 行`);
@@ -674,54 +697,7 @@
   }
 
   // === Main Processing ===
-  function processData(){
-    try{
-      const L = parseFloat(wall_length_m.value);
-      const alpha = parseFloat(alpha_factor.value);
-      const c0 = parseFloat(c0_factor.value);
-      const side = envelope_side.value;
-      const specificDeformationValue = parseFloat(specific_deformation.value);
-      const maxUltimateDeformationValue = parseFloat(max_ultimate_deformation.value);
-
-      if(!isFinite(L) || !isFinite(alpha) || !isFinite(c0) || c0 < 0 || !isFinite(specificDeformationValue) || specificDeformationValue <= 0 || !isFinite(maxUltimateDeformationValue) || maxUltimateDeformationValue <= 0){
-        alert('入力値が不正です。数値を正しく入力してください。');
-        return;
-      }
-      
-      // Calculate gamma_specific from 1/specificDeformationValue
-      const gamma_specific = 1.0 / specificDeformationValue;
-      
-      // Calculate delta_u_max from 1/maxUltimateDeformationValue
-      const delta_u_max = 1.0 / maxUltimateDeformationValue;
-
-      // Direct input - data already has gamma and gamma0
-      const dataWithAngles = rawData;
-
-      // Step 2: Generate envelope
-      envelopeData = generateEnvelope(dataWithAngles, side);
-      if(envelopeData.length === 0){
-        alert('包絡線の生成に失敗しました。データを確認してください。');
-        return;
-      }
-
-      // Step 3: Calculate characteristic points
-      analysisResults = calculateJTCCMMetrics(envelopeData, gamma_specific, delta_u_max, L, alpha, c0);
-
-      // Step 4: Render results
-      renderPlot(envelopeData, analysisResults);
-      renderResults(analysisResults);
-
-  if(downloadExcelButton) downloadExcelButton.disabled = false;
-  if(generatePdfButton) generatePdfButton.disabled = false;
-      historyStack = [cloneEnvelope(envelopeData)];
-      redoStack = [];
-      updateHistoryButtons();
-    }catch(error){
-      alert('計算エラーが発生しました: ' + error.message);
-      console.error(error);
-      appendLog('計算エラー: ' + (error && error.stack ? error.stack : error.message));
-    }
-  }
+  // 手動 processData 廃止（自動解析は processDataDirect 使用）
 
   // === Direct Input Processing ===
   function processDataDirect(){

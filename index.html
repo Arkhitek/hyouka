@@ -45,8 +45,8 @@
     <h2>📖 操作ガイド</h2>
     <div class="guide-content">
       <div class="guide-section">
-        <h3>1️⃣ データ入力</h3>
-        <p>変形角γ(rad)と荷重P(kN)を1行1データで入力・貼り付けし、「データ解析実行」をクリック</p>
+  <h3>1️⃣ データ入力</h3>
+  <p>変形角γ(rad)と荷重P(kN)を1行1データで入力・貼り付けすると<strong>自動で解析が実行</strong>されます</p>
       </div>
       <div class="guide-section">
         <h3>2️⃣ 包絡線の編集</h3>
@@ -139,7 +139,7 @@
       </select>
     </div>
 
-    <button id="processButton" disabled>解析実行</button>
+  <!-- 自動解析に移行のため手動実行ボタンを削除 -->
     <div class="row">
       <div class="control-group">
         <button id="undoButton" disabled>Undo (Ctrl+Z)</button>
@@ -183,11 +183,11 @@
       <tbody id="resultsBasic">
         <tr><td>最大耐力 Pmax (kN)</td><td id="val_pmax">-</td></tr>
         <tr><td>降伏耐力 Py (kN)</td><td id="val_py">-</td></tr>
-        <tr><td>降伏変位 δy (rad)</td><td id="val_dy">-</td></tr>
+  <tr><td>降伏変位 δy</td><td id="val_dy">-</td></tr>
         <tr><td>初期剛性 K (kN/rad)</td><td id="val_K">-</td></tr>
         <tr><td>終局耐力 Pu (kN)</td><td id="val_pu">-</td></tr>
-        <tr><td>降伏点変位 δv (rad)</td><td id="val_dv">-</td></tr>
-        <tr><td>終局変位 δu (rad)</td><td id="val_du">-</td></tr>
+  <tr><td>降伏点変位 δv</td><td id="val_dv">-</td></tr>
+  <tr><td>終局変位 δu</td><td id="val_du">-</td></tr>
         <tr><td>塑性率 μ</td><td id="val_mu">-</td></tr>
         <tr><td>構造特性係数 Ds (1/√(2μ-1))</td><td id="val_ds">-</td></tr>
       </tbody>
