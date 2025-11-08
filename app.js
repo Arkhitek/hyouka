@@ -608,14 +608,14 @@
     // Determine envelope sign based on the data
     const envelopeSign = envelope[0] && envelope[0].Load < 0 ? -1 : 1;
 
-  // Calculate data range for auto-fitting (use rad)
-  const allGammas = rawData.map(pt => pt.gamma); // rad
-    const allLoads = rawData.map(pt => pt.Load); // kN
+  // Calculate data range for auto-fitting based on envelope (not raw data)
+  const envGammas = envelope.map(pt => pt.gamma);
+    const envLoads = envelope.map(pt => pt.Load);
     
-    const minGamma = Math.min(...allGammas);
-    const maxGamma = Math.max(...allGammas);
-    const minLoad = Math.min(...allLoads);
-    const maxLoad = Math.max(...allLoads);
+    const minGamma = Math.min(...envGammas);
+    const maxGamma = Math.max(...envGammas);
+    const minLoad = Math.min(...envLoads);
+    const maxLoad = Math.max(...envLoads);
     
     // Add 10% margin for better visibility
     const gammaMargin = (maxGamma - minGamma) * 0.1;
