@@ -1398,6 +1398,27 @@
     };
     plotDiv.on('plotly_click', _plotClickHandler);
     
+    // マウスホバー時に「クリックで編集」注釈を表示
+    plotDiv.on('plotly_hover', function(data){
+      if(!data.points || data.points.length === 0) return;
+      const pt = data.points[0];
+      if(pt.curveNumber === 2){ // 包絡線点
+        if(pointTooltip){
+          pointTooltip.textContent = 'クリックで編集';
+          pointTooltip.style.display = 'block';
+          pointTooltip.style.left = (data.event.pageX + 10) + 'px';
+          pointTooltip.style.top = (data.event.pageY - 25) + 'px';
+        }
+      }
+    });
+    
+    // マウスが点から離れたらツールチップを非表示
+    plotDiv.on('plotly_unhover', function(){
+      if(pointTooltip){
+        pointTooltip.style.display = 'none';
+      }
+    });
+    
     // ダブルクリックによる点追加やデフォルト操作は許容（別処理はしない）
     
     // ダブルクリックによる新規点追加機能は廃止（仕様変更）
