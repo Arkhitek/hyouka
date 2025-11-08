@@ -653,6 +653,20 @@
     try{
       if(!window.Plotly) return;
       if(window.__PLOTLY_RELAYOUT_PATCHED__) return;
+      // バージョン判定 (>= 2.31.0 なら重いパッチはスキップ)
+      function parseVer(v){
+        const m = String(v||'').split('.').map(n=>parseInt(n,10)||0);
+        return {maj:m[0]||0, min:m[1]||0, pat:m[2]||0};
+      }
+      function lt(a,b){
+        const A=parseVer(a), B=parseVer(b);
+        if(A.maj!==B.maj) return A.maj<B.maj;
+        if(A.min!==B.min) return A.min<B.min;
+        return A.pat<B.pat;
+      }
+      const ver = (window.Plotly && window.Plotly.version) ? window.Plotly.version : '0.0.0';
+      const needHeavyPatch = lt(ver, '2.31.0');
+
       const origRelayout = window.Plotly.relayout;
       if(typeof origRelayout !== 'function') return;
       window.Plotly.relayout = function patchedRelayout(gd, a, b){
@@ -702,9 +716,28 @@
           console.info('[patch.lib.warn] installed');
         }
       }catch(err){ console.warn('patch Plotly.Lib.warn failed', err); }
-      // 追加: 内部 API Plots.relayout もパッチしてライブラリ内部経路をガード
+
+          // さらに保険として console.warn を薄くラップし、"Relayout fail" を info に降格
+          try{
+            if(!window.__CONSOLE_WARN_PATCHED__ && typeof console !== 'undefined' && typeof console.warn === 'function'){
+              const _origConsoleWarn = console.warn.bind(console);
+              console.warn = function(){
+                try{
+                  const msg = arguments && arguments[0] ? String(arguments[0]) : '';
+                  if(msg.indexOf('Relayout fail') !== -1){
+                    console.info('[console.warn suppressed] Relayout fail:', arguments[1], arguments[2]);
+                    return;
+                  }
+                }catch(_){/* noop */}
+                return _origConsoleWarn.apply(console, arguments);
+              };
+              window.__CONSOLE_WARN_PATCHED__ = true;
+              console.info('[patch.console.warn] installed');
+            }
+          }catch(err){ /* ignore */ }
+      // 追加: 内部 API Plots.relayout もパッチ（古いバージョンのみ）
       try{
-        if(window.Plotly.Plots && typeof window.Plotly.Plots.relayout === 'function' && !window.__PLOTS_RELAYOUT_PATCHED__){
+        if(needHeavyPatch && window.Plotly.Plots && typeof window.Plotly.Plots.relayout === 'function' && !window.__PLOTS_RELAYOUT_PATCHED__){
           const origPlotsRelayout = window.Plotly.Plots.relayout;
           window.Plotly.Plots.relayout = function patchedPlotsRelayout(gd, a, b){
             try{
