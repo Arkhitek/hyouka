@@ -142,7 +142,7 @@
   <script>
     // 設定: 必要に応じてPNGロゴとExcelテンプレートの使用を切替（デフォルトはどちらもfalse）
     window.APP_CONFIG = Object.assign({
-      usePngLogo: true, // 新ロゴPNGを優先表示
+  usePngLogo: true, // 新ロゴPNGを優先表示
       useExcelTemplate: false,
       logoLink: 'https://arkhitek.co.jp/'
     }, window.APP_CONFIG || {});
@@ -182,7 +182,7 @@
       // 1段目: PNG
       if(usePng){
         const testPng = new Image();
-        testPng.onload = () => { mountImage('./arkhitek_logo.png'); console.info('PNG logo loaded'); };
+  testPng.onload = () => { mountImage('./arkhitek-logo.png'); console.info('PNG logo loaded'); };
         testPng.onerror = () => {
           console.warn('PNG logo missing. Fallback to SVG');
           // 2段目: SVG
@@ -191,7 +191,7 @@
           testSvg.onerror = () => { console.warn('SVG logo also missing. Using text fallback'); mountTextFallback(); };
           testSvg.src = './logo_arkhitek.svg';
         };
-        testPng.src = './arkhitek_logo.png';
+  testPng.src = './arkhitek-logo.png';
         return;
       }
       // 直接SVG試行
