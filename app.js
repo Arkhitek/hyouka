@@ -935,7 +935,7 @@
 
   // === Rendering ===
   function renderPlot(envelope, results){
-    const { Pmax, Py, Py_gamma, lineI, lineII, lineIII, lineV, lineVI, delta_u, p0_a, p0_b, p0_c, p0_d } = results;
+    const { Pmax, Py, Py_gamma, lineI, lineII, lineIII, lineV, lineVI, delta_u, delta_v, p0_a, p0_b, p0_c, p0_d } = results;
 
   // Draw evaluation overlays on the selected side explicitly
   const envelopeSign = (envelope_side && envelope_side.value === 'negative') ? -1 : 1;
@@ -1091,6 +1091,18 @@
           text: `Pu=${(lineVI.Load).toFixed(1)} kN`,
           showarrow: true,
           ax: 20, ay: -20,
+          font: {size: 12, color: 'purple'},
+          bgcolor: 'rgba(255,255,255,0.7)',
+          bordercolor: 'purple', borderwidth: 1
+        },
+        // 降伏点変位 δv (rad) → Line V の終点（delta_v の位置）に表示
+        {
+          x: (lineV.end.gamma) * envelopeSign,
+          y: (lineV.end.Load) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `δv=${delta_v.toExponential(2)} rad`,
+          showarrow: true,
+          ax: -30, ay: 20,
           font: {size: 12, color: 'purple'},
           bgcolor: 'rgba(255,255,255,0.7)',
           bordercolor: 'purple', borderwidth: 1
