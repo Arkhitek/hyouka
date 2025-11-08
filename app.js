@@ -101,6 +101,7 @@
     pointEditDialog.style.display = 'flex';
     const content = document.getElementById('pointEditContent');
     if(content){
+      content.style.position = 'absolute';
       // 選択点のスクリーン座標を取得
       const xaxis = plotDiv._fullLayout.xaxis;
       const yaxis = plotDiv._fullLayout.yaxis;
@@ -152,6 +153,7 @@
         console.debug('[ダイアログ配置] 点位置=('+screenX.toFixed(0)+','+screenY.toFixed(0)+') → ダイアログ位置=('+left+','+top+')');
       } else {
         // フォールバック: 中央表示
+        content.style.position = 'absolute';
         content.style.left = '50%';
         content.style.top = '120px';
         content.style.transform = 'translateX(-50%)';
@@ -193,7 +195,9 @@
       content.style.position = '';
       content.style.left = '';
       content.style.top = '';
+      content.style.transform = '';
     }
+    console.debug('[ダイアログ] 閉じました');
   }
 
   function applyPointEdit(){
@@ -1027,6 +1031,11 @@
       if(!relayoutHandlerAttached){
         plotDiv.on('plotly_relayout', function(e){
           try{
+            // ポップアップ表示中はautoscaleをスキップ
+            if(pointEditDialog && pointEditDialog.style.display !== 'none'){
+              console.debug('[Autoscale] ポップアップ表示中のためスキップ');
+              return;
+            }
             // Autoscaleボタンやモードバー操作で xaxis.autorange / yaxis.autorange が true になった場合に再フィット
             const keys = e ? Object.keys(e) : [];
             const triggeredAuto = keys.some(k => /autorange$/.test(k) && e[k] === true);
@@ -1045,6 +1054,11 @@
         // ダブルクリックのリセットでも同様にフィット
         plotDiv.on('plotly_doubleclick', function(){
           try{
+            // ポップアップ表示中はダブルクリックリセットをスキップ
+            if(pointEditDialog && pointEditDialog.style.display !== 'none'){
+              console.debug('[ダブルクリック] ポップアップ表示中のためスキップ');
+              return false;
+            }
             if(envelopeData && envelopeData.length){
               console.info('[ダブルクリック] 包絡線範囲へリセット');
               const r = computeEnvelopeRanges(envelopeData);
