@@ -13,6 +13,8 @@
   // イベントハンドラ参照（重複登録防止用）
   let _plotClickHandler = null;
   let _keydownHandler = null;
+  // 包絡線フィット範囲キャッシュ
+  let cachedEnvelopeRange = null;
 
   // === Elements ===
   const gammaInput = document.getElementById('gammaInput');
@@ -220,8 +222,21 @@
     pushHistory(envelopeData);
     console.debug('[適用ボタン] closePointEditDialog()を呼び出します');
     closePointEditDialog();
-    renderPlot(envelopeData, analysisResults);
+    // 先に再計算して範囲を再評価
     recalculateFromEnvelope(envelopeData);
+    // 描画後、requestAnimationFrameで包絡線範囲を適用して全体フィット化を阻止
+    requestAnimationFrame(()=>{
+      if(cachedEnvelopeRange){
+        Plotly.relayout(plotDiv, {
+          'xaxis.autorange': false,
+          'yaxis.autorange': false,
+          'xaxis.range': cachedEnvelopeRange.xRange,
+          'yaxis.range': cachedEnvelopeRange.yRange
+        });
+      }else{
+        fitEnvelopeRanges('点編集後キャッシュ無し');
+      }
+    });
   }
   
   // キャンセルボタンのハンドラは openPointEditDialog 内で動的に設定されるため、ここでは不要
@@ -486,6 +501,7 @@
       if(!envelopeData || !envelopeData.length) return;
       const r = computeEnvelopeRanges(envelopeData);
       console.info('[Fit] 包絡線範囲へフィット:', reason || '');
+      cachedEnvelopeRange = r; // キャッシュ更新
       Plotly.relayout(plotDiv, {
         'xaxis.autorange': false,
         'yaxis.autorange': false,
@@ -1127,7 +1143,26 @@
       ]
     };
 
-  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, {editable: false, displayModeBar: true})
+  const plotConfig = {
+    editable: false,
+    displayModeBar: true,
+    // デフォルトのAutoscale/Resetを削除（全データへのフィットを防止）
+    modeBarButtonsToRemove: ['autoScale2d', 'resetScale2d'],
+    // 包絡線範囲へのフィット専用ボタンを追加
+    modeBarButtonsToAdd: [
+      {
+        name: '包絡線にフィット',
+        icon: (Plotly && Plotly.Icons && Plotly.Icons.autoscale) ? Plotly.Icons.autoscale : undefined,
+        click: function(gd){
+          if(envelopeData && envelopeData.length){
+            fitEnvelopeRanges('モードバー');
+          }
+        }
+      }
+    ]
+  };
+
+  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, plotConfig)
     .then(function(){
       // 包絡線点の編集機能を実装
       setupEnvelopeEditing(editableEnvelope);
@@ -1136,20 +1171,18 @@
       if(!relayoutHandlerAttached){
         plotDiv.on('plotly_relayout', function(e){
           try{
-            // ポップアップ表示中はautoscaleをスキップ
-            if(pointEditDialog && pointEditDialog.style.display !== 'none'){
-              console.debug('[Autoscale] ポップアップ表示中のためスキップ');
-              return;
-            }
-            // Autoscaleボタンやモードバー操作で xaxis.autorange / yaxis.autorange が true になった場合に再フィット
-            const keys = e ? Object.keys(e) : [];
-            const triggeredAuto = keys.some(k => /autorange$/.test(k) && e[k] === true);
-            if(triggeredAuto && envelopeData && envelopeData.length){
-              // Plotlyのデフォルトautoscale処理を待ってから包絡線範囲へ強制的に再設定
-              // 複数のタイミングで実行して確実に上書き
-              setTimeout(function(){ fitEnvelopeRanges('Autoscaleボタン(1回目)'); }, 0);
-              setTimeout(function(){ fitEnvelopeRanges('Autoscaleボタン(2回目)'); }, 50);
-              setTimeout(function(){ fitEnvelopeRanges('Autoscaleボタン(3回目)'); }, 100);
+            if(pointEditDialog && pointEditDialog.style.display !== 'none') return;
+            if(!e) return;
+            // 何らかの理由でautorangeがtrueになった場合、即キャッシュ適用
+            if((e['xaxis.autorange'] === true || e['yaxis.autorange'] === true) && cachedEnvelopeRange){
+              requestAnimationFrame(()=>{
+                Plotly.relayout(plotDiv, {
+                  'xaxis.autorange': false,
+                  'yaxis.autorange': false,
+                  'xaxis.range': cachedEnvelopeRange.xRange,
+                  'yaxis.range': cachedEnvelopeRange.yRange
+                });
+              });
             }
           }catch(err){ console.warn('autoscale再調整エラー', err); }
         });
@@ -1596,12 +1629,15 @@
 
       try{
         // Serialize input data and parameters
+        if(!wall_length_m || !test_method || !alpha_factor || !envelope_side){
+          throw new Error('必須入力要素が取得できません (IDの変更やDOM未構築の可能性)');
+        }
         const shareData = {
           data: rawData.map(d => [d.gamma, d.Load]), // [[gamma, Load], ...]
-          wall_length: parseFloat(wallLengthInput.value) || 1.0,
-          test_method: testMethodSelect.value,
-          alpha: parseFloat(alphaFactorInput.value) || 1.0,
-          side: envelopeSideSelect.value
+          wall_length: parseFloat(wall_length_m.value) || 1.0,
+          test_method: (test_method.value || '').trim(),
+          alpha: parseFloat(alpha_factor.value) || 1.0,
+          side: (envelope_side.value || '').trim()
         };
 
         // Encode to base64 JSON
@@ -1646,10 +1682,10 @@
         }
 
         // Populate input fields
-        wallLengthInput.value = shareData.wall_length || 1.0;
-        testMethodSelect.value = shareData.test_method || 'monotonic';
-        alphaFactorInput.value = shareData.alpha || 1.0;
-        envelopeSideSelect.value = shareData.side || 'positive';
+  if(wall_length_m) wall_length_m.value = shareData.wall_length || 1.0;
+  if(test_method) test_method.value = shareData.test_method || 'monotonic';
+  if(alpha_factor) alpha_factor.value = shareData.alpha || 1.0;
+  if(envelope_side) envelope_side.value = shareData.side || 'positive';
 
         // Populate data table
         rawData = shareData.data.map(([gamma, Load]) => ({ gamma, Load }));
