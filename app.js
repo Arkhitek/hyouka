@@ -1317,6 +1317,21 @@
         ranges = computeEnvelopeRanges(envelope);
         console.debug('[renderPlot] 描画範囲を新規計算:', ranges);
       }
+
+    // レンジの健全性チェック（NaN / Infinity を排除）
+    function sanitizeRange(arr, defMin, defMax){
+      const a0 = Array.isArray(arr) ? arr[0] : undefined;
+      const a1 = Array.isArray(arr) ? arr[1] : undefined;
+      let minV = Number.isFinite(a0) ? a0 : defMin;
+      let maxV = Number.isFinite(a1) ? a1 : defMax;
+      if(!Number.isFinite(minV)) minV = -1;
+      if(!Number.isFinite(maxV)) maxV = 1;
+      if(minV === maxV){ maxV = minV + 1; }
+      if(minV > maxV){ const t = minV; minV = maxV; maxV = t; }
+      return [minV, maxV];
+    }
+    const xRangeSafe = sanitizeRange(ranges && ranges.xRange, -1, 1);
+    const yRangeSafe = sanitizeRange(ranges && ranges.yRange, -1, 1);
     
     // 包絡線データを編集可能にするための状態管理
     let editableEnvelope = envelope.map(pt => ({...pt}));    // Original raw data (all points) - showing positive and negative loads
@@ -1397,7 +1412,12 @@
     };
 
     // P0 criteria lines
-  const gamma_max = Math.max(...envelope.map(pt => Math.abs(pt.gamma)));
+  let gamma_max = Math.max(...envelope.map(pt => Math.abs(pt.gamma)));
+    if(!Number.isFinite(gamma_max) || gamma_max <= 0){
+      // 範囲から安全な最大を推定
+      gamma_max = Math.max(Math.abs(xRangeSafe[0]), Math.abs(xRangeSafe[1]));
+      if(!Number.isFinite(gamma_max) || gamma_max <= 0) gamma_max = 1;
+    }
     const trace_p0_lines = {
       x: [0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign],
       y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, p0_d * envelopeSign, p0_d * envelopeSign],
@@ -1410,18 +1430,19 @@
       title: '荷重-変形関係と評価直線',
       xaxis: {
         title: '変形角 γ (rad)',
-        range: ranges.xRange,
+        range: xRangeSafe,
         autorange: false
       },
       yaxis: {
         title: '荷重 P (kN)',
-        range: ranges.yRange,
+        range: yRangeSafe,
         autorange: false
       },
       hovermode: 'closest',
       dragmode: 'pan', // デフォルトはパン操作
       showlegend: true,
       height: 600,
+      uirevision: 'fixed',
       annotations: [
         // 終局変位 δu (rad) → Line VI の終点（delta_u の位置）に表示
         {
@@ -1545,6 +1566,10 @@
         });
         relayoutHandlerAttached = true;
       }
+    })
+    .catch(function(err){
+      // 初期 newPlot の undefined 拒否などを握りつぶしてノイズ抑制
+      console.info('[plot.init suppressed]', err);
     });
   }
 
