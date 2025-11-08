@@ -10,7 +10,6 @@
   let envelopeData = null;
   let analysisResults = {};
   let relayoutHandlerAttached = false; // Plotly autoscale対策のイベント重複防止
-  let editMode = false; // 包絡線編集モードのON/OFF
 
   // === Elements ===
   const gammaInput = document.getElementById('gammaInput');
@@ -22,13 +21,13 @@
   const processButton = document.getElementById('processButton');
   const downloadExcelButton = document.getElementById('downloadExcelButton');
   const clearDataButton = document.getElementById('clearDataButton');
-  const editModeButton = document.getElementById('editModeButton');
+  
   const plotDiv = document.getElementById('plot');
   const logOutput = document.getElementById('logOutput');
   const pointTooltip = document.getElementById('pointTooltip');
   const undoButton = document.getElementById('undoButton');
   const redoButton = document.getElementById('redoButton');
-  const openPointEditButton = document.getElementById('openPointEdit');
+  const openPointEditButton = null; // ボタンは廃止
   const pointEditDialog = document.getElementById('pointEditDialog');
   const editGammaInput = document.getElementById('edit_gamma');
   const editLoadInput = document.getElementById('edit_load');
@@ -81,12 +80,38 @@
   }
 
   function openPointEditDialog(){
-    if(!editMode || window._selectedEnvelopePoint < 0 || !envelopeData) return;
+    if(window._selectedEnvelopePoint < 0 || !envelopeData) return;
     const idx = window._selectedEnvelopePoint;
     const pt = envelopeData[idx];
     editGammaInput.value = pt.gamma.toFixed(6);
     editLoadInput.value = pt.Load.toFixed(4);
+    // ダイアログを初期位置へ（中央）
+    pointEditDialog.classList.add('custom-position');
     pointEditDialog.style.display = 'flex';
+    const content = document.getElementById('pointEditContent');
+    if(content){
+      content.style.left = '50%';
+      content.style.top = '120px';
+      content.style.transform = 'translateX(-50%)';
+    }
+    // 編集中リアルタイム反映
+    editGammaInput.oninput = function(){
+      const v = parseFloat(editGammaInput.value);
+      if(!isNaN(v)){
+        envelopeData[idx].gamma = v;
+        renderPlot(envelopeData, analysisResults); // 軽量更新: 全描画再生成（簡易）
+      }
+    };
+    editLoadInput.oninput = function(){
+      const v = parseFloat(editLoadInput.value);
+      if(!isNaN(v)){
+        envelopeData[idx].Load = v;
+        renderPlot(envelopeData, analysisResults);
+      }
+    };
+    // キャンセル用に元値保存
+    pointEditDialog.dataset.originalGamma = pt.gamma;
+    pointEditDialog.dataset.originalLoad = pt.Load;
   }
 
   function closePointEditDialog(){ pointEditDialog.style.display = 'none'; }
@@ -104,6 +129,53 @@
     recalculateFromEnvelope(envelopeData);
     closePointEditDialog();
   }
+  // キャンセル拡張: 元に戻す
+  if(cancelPointEditButton){
+    cancelPointEditButton.onclick = function(){
+      if(pointEditDialog.dataset.originalGamma && pointEditDialog.dataset.originalLoad && window._selectedEnvelopePoint >= 0){
+        const og = parseFloat(pointEditDialog.dataset.originalGamma);
+        const ol = parseFloat(pointEditDialog.dataset.originalLoad);
+        envelopeData[window._selectedEnvelopePoint].gamma = og;
+        envelopeData[window._selectedEnvelopePoint].Load = ol;
+        renderPlot(envelopeData, analysisResults);
+      }
+      closePointEditDialog();
+    };
+  }
+  // 削除ボタン
+  const deletePointEditButton = document.getElementById('deletePointEdit');
+  if(deletePointEditButton){
+    deletePointEditButton.onclick = function(){
+      if(window._selectedEnvelopePoint >= 0){
+        deleteEnvelopePoint(window._selectedEnvelopePoint, envelopeData);
+        window._selectedEnvelopePoint = -1;
+        renderPlot(envelopeData, analysisResults);
+        closePointEditDialog();
+      }
+    };
+  }
+  // ダイアログドラッグ移動
+  (function enableDialogDrag(){
+    const content = document.getElementById('pointEditContent');
+    const handle = content ? content.querySelector('.drag-handle') : null;
+    if(!content || !handle) return;
+    let dragging = false; let startX=0, startY=0, origLeft=0, origTop=0;
+    handle.addEventListener('mousedown', function(e){
+      dragging = true; startX = e.clientX; startY = e.clientY;
+      const rect = content.getBoundingClientRect();
+      origLeft = rect.left; origTop = rect.top; content.style.transform='';
+      document.body.style.userSelect='none';
+    });
+    window.addEventListener('mousemove', function(e){
+      if(!dragging) return;
+      const dx = e.clientX - startX; const dy = e.clientY - startY;
+      content.style.left = (origLeft + dx) + 'px';
+      content.style.top = (origTop + dy) + 'px';
+    });
+    window.addEventListener('mouseup', function(){
+      dragging = false; document.body.style.userSelect='';
+    });
+  })();
 
   // ローカル(file://)でのCORS制約回避用: 組込サンプルCSV（fetch失敗時のフォールバック）
   const BUILTIN_SAMPLE_CSV = `gamma,Load\n
@@ -193,7 +265,7 @@
   processButton.addEventListener('click', processData);
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
   clearDataButton.addEventListener('click', clearInputData);
-  if(editModeButton) editModeButton.addEventListener('click', toggleEditMode);
+  
   if(undoButton) undoButton.addEventListener('click', performUndo);
   if(redoButton) redoButton.addEventListener('click', performRedo);
   if(openPointEditButton) openPointEditButton.addEventListener('click', openPointEditDialog);
@@ -207,12 +279,7 @@
     rawData = [];
     envelopeData = null;
     analysisResults = {};
-    editMode = false;
-    if(editModeButton){
-      editModeButton.textContent = '包絡線編集モード: OFF';
-      editModeButton.classList.remove('active');
-      editModeButton.disabled = true;
-    }
+    
   processButton.disabled = true;
   if(undoButton) undoButton.disabled = true;
   if(redoButton) redoButton.disabled = true;
@@ -227,38 +294,7 @@
     });
   }
 
-  function toggleEditMode(){
-    if(!envelopeData || envelopeData.length === 0){
-      alert('先に解析を実行してください');
-      return;
-    }
-    
-    editMode = !editMode;
-    
-    if(editMode){
-      editModeButton.textContent = '包絡線編集モード: ON';
-      editModeButton.classList.add('active');
-      appendLog('包絡線編集モードを有効化しました');
-      
-      // グラフを固定モードに（ズーム・パン無効）
-      Plotly.relayout(plotDiv, {
-        'dragmode': false,
-        'xaxis.fixedrange': true,
-        'yaxis.fixedrange': true
-      });
-    } else {
-      editModeButton.textContent = '包絡線編集モード: OFF';
-      editModeButton.classList.remove('active');
-      appendLog('包絡線編集モードを無効化しました');
-      
-      // グラフを通常モードに（ズーム・パン有効）
-      Plotly.relayout(plotDiv, {
-        'dragmode': 'pan',
-        'xaxis.fixedrange': false,
-        'yaxis.fixedrange': false
-      });
-    }
-  }
+  // 編集モードは廃止
 
   // === 起動時 sample.csv 自動読込のみ ===
   function loadCsvText(text){
@@ -416,8 +452,7 @@
       renderPlot(envelopeData, analysisResults);
       renderResults(analysisResults);
 
-      if(downloadExcelButton) downloadExcelButton.disabled = false;
-      if(editModeButton) editModeButton.disabled = false; // 編集ボタン有効化
+  if(downloadExcelButton) downloadExcelButton.disabled = false;
       historyStack = [cloneEnvelope(envelopeData)];
       redoStack = [];
       updateHistoryButtons();
@@ -455,8 +490,7 @@
       renderPlot(envelopeData, analysisResults);
       renderResults(analysisResults);
 
-      if(downloadExcelButton) downloadExcelButton.disabled = false;
-      if(editModeButton) editModeButton.disabled = false; // 編集ボタン有効化
+  if(downloadExcelButton) downloadExcelButton.disabled = false;
       historyStack = [cloneEnvelope(envelopeData)];
       redoStack = [];
       updateHistoryButtons();
@@ -926,7 +960,7 @@
     
     // 包絡線点のクリック処理
     plotDiv.on('plotly_click', function(data){
-      if(!editMode) return; // 編集モードOFF時は何もしない
+  // 編集モード撤廃: 常に受け付け
       
       if(!data.points || data.points.length === 0) return;
       const pt = data.points[0];
@@ -949,62 +983,13 @@
       highlightSelectedPoint(editableEnvelope);
     });
     
-    // Plotlyのデフォルトダブルクリックを無効化
-    plotDiv.on('plotly_doubleclick', function(){
-      return false; // prevent default
-    });
+    // ダブルクリックによる点追加やデフォルト操作は許容（別処理はしない）
     
-    // ダブルクリックで新規点追加（Plotlyイベントの外で処理）
-    let clickTimer = null;
-    let clickCount = 0;
-    
-    plotDiv.addEventListener('mousedown', function(e){
-      if(!editMode) return; // 編集モードOFF時は何もしない
-      
-      clickCount++;
-      
-      if(clickCount === 1){
-        clickTimer = setTimeout(function(){
-          clickCount = 0;
-        }, 300);
-      } else if(clickCount === 2){
-        clearTimeout(clickTimer);
-        clickCount = 0;
-        
-        // ダブルクリック処理
-        const bb = plotDiv.getBoundingClientRect();
-        const x = e.clientX - bb.left;
-        const y = e.clientY - bb.top;
-        
-        const xaxis = plotDiv._fullLayout.xaxis;
-        const yaxis = plotDiv._fullLayout.yaxis;
-        if(!xaxis || !yaxis) return;
-        
-        const xData = xaxis.p2c(x);
-        const yData = yaxis.p2c(y);
-        
-        // 点の近くでダブルクリックした場合は追加しない（ドラッグ開始と誤認防止）
-        let nearPoint = false;
-        editableEnvelope.forEach((pt, idx) => {
-          const xPx = xaxis.c2p(pt.gamma);
-          const yPx = yaxis.c2p(pt.Load);
-          const dist = Math.sqrt(Math.pow(xPx - x, 2) + Math.pow(yPx - y, 2));
-          if(dist < 15) nearPoint = true;
-        });
-        
-        if(!nearPoint){
-          // 最寄りの包絡線セグメント（2点間）を見つけて中点に追加
-          addEnvelopePointAtNearestSegment(x, y, xData, yData, editableEnvelope, xaxis, yaxis);
-        }
-        
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
+    // ダブルクリックによる新規点追加機能は廃止（仕様変更）
     
     // Delキーで選択中の点を削除
     const handleKeydown = function(e){
-      if(!editMode) return; // 編集モードOFF時は何もしない
+  // 編集モード撤廃
       
       if(e.key === 'Delete' || e.key === 'Del'){
         if(selectedPointIndex >= 0 && selectedPointIndex < editableEnvelope.length){
@@ -1037,138 +1022,13 @@
     document.removeEventListener('keydown', handleKeydown);
     document.addEventListener('keydown', handleKeydown);
     
-    // マウスダウンで包絡線点をつかむ(ダブルクリックとは分離)
-    let mousedownForDrag = null;
-    
-    plotDiv.addEventListener('mousedown', function(e){
-      if(!editMode) return; // 編集モードOFF時は何もしない
-      
-      // ダブルクリック処理と競合しないように、シングルクリック時のみドラッグ開始
-      if(e.detail > 1) return; // ダブルクリック以上は無視
-      
-      const bb = plotDiv.getBoundingClientRect();
-      const x = e.clientX - bb.left;
-      const y = e.clientY - bb.top;
-      
-      // Plotly座標系に変換
-      const xaxis = plotDiv._fullLayout.xaxis;
-      const yaxis = plotDiv._fullLayout.yaxis;
-      if(!xaxis || !yaxis) return;
-      
-      const xData = xaxis.p2c(x);
-      const yData = yaxis.p2c(y);
-      
-      // 最も近い包絡線点を探す
-      let minDist = Infinity;
-      let closestIdx = -1;
-      editableEnvelope.forEach((pt, idx) => {
-        const xPx = xaxis.c2p(pt.gamma);
-        const yPx = yaxis.c2p(pt.Load);
-        const dist = Math.sqrt(Math.pow(xPx - x, 2) + Math.pow(yPx - y, 2));
-        if(dist < 15 && dist < minDist){ // 15px以内
-          minDist = dist;
-          closestIdx = idx;
-        }
-      });
-      
-      if(closestIdx >= 0){
-        // ドラッグ開始をわずかに遅延させる（クリックとの判別のため）
-        mousedownForDrag = {
-          index: closestIdx,
-          startX: e.clientX,
-          startY: e.clientY,
-          timestamp: Date.now()
-        };
-        // Plotlyのパン開始を抑止（ドラッグ操作を優先）
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
+    // ドラッグ操作は削除（仕様変更）
     
     // マウス移動でドラッグ
-    plotDiv.addEventListener('mousemove', function(e){
-      if(!editMode) return; // 編集モードOFF時は何もしない
-      
-      // mousedownForDragがあり、少し動いたらドラッグ開始
-      if(mousedownForDrag && !isDragging){
-        const dx = e.clientX - mousedownForDrag.startX;
-        const dy = e.clientY - mousedownForDrag.startY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        // 3px以上動いたらドラッグ開始（クリックとの判別）
-        if(dist > 3){
-          isDragging = true;
-          dragPointIndex = mousedownForDrag.index;
-          window._isDragging = true;
-          window._dragPointIndex = dragPointIndex;
-          plotDiv.style.cursor = 'grabbing';
-          
-          // ドラッグ中はPlotlyのパンを無効化
-          Plotly.relayout(plotDiv, {'dragmode': false});
-        }
-      }
-      
-  if(!isDragging || dragPointIndex < 0) return;
-      
-      const bb = plotDiv.getBoundingClientRect();
-      const x = e.clientX - bb.left;
-      const y = e.clientY - bb.top;
-      
-      const xaxis = plotDiv._fullLayout.xaxis;
-      const yaxis = plotDiv._fullLayout.yaxis;
-      if(!xaxis || !yaxis) return;
-      
-      const xData = xaxis.p2c(x);
-      const yData = yaxis.p2c(y);
-      
-      // 包絡線点の位置を更新
-      editableEnvelope[dragPointIndex].gamma = xData;
-      editableEnvelope[dragPointIndex].Load = yData;
-      
-      // プロット更新（包絡線と包絡線点のみ）
-      updateEnvelopePlot(editableEnvelope);
-    });
+    // moveイベントによるドラッグ処理は削除
     
     // マウスアップでドラッグ終了
-    plotDiv.addEventListener('mouseup', function(e){
-      mousedownForDrag = null; // mousedown状態をクリア
-      
-      if(isDragging){
-        isDragging = false;
-        dragPointIndex = -1;
-        window._isDragging = false;
-        window._dragPointIndex = -1;
-        plotDiv.style.cursor = 'default';
-        
-  // ドラッグ終了後のドラッグモード復元（編集モードON中は固定）
-  Plotly.relayout(plotDiv, {'dragmode': editMode ? false : 'pan'});
-        
-        // ドラッグ終了後に再計算
-        recalculateFromEnvelope(editableEnvelope);
-        envelopeData = editableEnvelope.map(p=>({...p}));
-        pushHistory(envelopeData);
-        if(openPointEditButton) openPointEditButton.disabled = (window._selectedEnvelopePoint < 0);
-        if(pointTooltip) pointTooltip.style.display = 'none';
-      }
-    });
-    
-    plotDiv.addEventListener('mouseleave', function(e){
-      mousedownForDrag = null; // mousedown状態をクリア
-      
-      if(isDragging){
-        isDragging = false;
-        dragPointIndex = -1;
-        window._isDragging = false;
-        window._dragPointIndex = -1;
-        plotDiv.style.cursor = 'default';
-        
-  // マウスが外れた場合も、編集モードON中は固定、OFFならパンへ
-        Plotly.relayout(plotDiv, {'dragmode': editMode ? false : 'pan'});
-        envelopeData = editableEnvelope.map(p=>({...p}));
-        pushHistory(envelopeData);
-        if(pointTooltip) pointTooltip.style.display = 'none';
-      }
-    });
+    // ドラッグ終了/離脱処理も不要
   }
   
   function highlightSelectedPoint(editableEnvelope){

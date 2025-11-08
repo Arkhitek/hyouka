@@ -40,6 +40,12 @@ button.edit-mode{background:#95a5a6;margin:5px}
 button.edit-mode:hover{background:#7f8c8d}
 button.edit-mode.active{background:#e74c3c;font-weight:bold}
 button.edit-mode.active:hover{background:#c0392b}
+.modal-actions button.danger{background:#e74c3c;color:#fff}
+.modal-actions button.danger:hover{background:#c0392b}
+
+/* Draggable modal custom positioning */
+#pointEditDialog.custom-position .modal-content{position:absolute;}
+.drag-handle{padding:6px 8px;background:#ecf0f1;border-radius:4px;margin:-4px -4px 10px -4px;}
 .divider{text-align:center;margin:20px 0;color:#7f8c8d;font-weight:700;position:relative}
 .divider::before,.divider::after{content:'';position:absolute;top:50%;width:40%;height:1px;background:#bdc3c7}
 .divider::before{left:0}
