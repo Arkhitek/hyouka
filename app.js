@@ -412,7 +412,7 @@
   redoStack = [];
     plotDiv.innerHTML = '';
     // 結果表示リセット
-    ['val_pmax','val_py','val_dy','val_K','val_pu','val_du','val_mu','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
+  ['val_pmax','val_py','val_dy','val_K','val_pu','val_du','val_mu','val_ds','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
       const el = document.getElementById(id); if(el) el.textContent='-';
     });
   }
@@ -1057,7 +1057,57 @@
       },
       hovermode: 'closest',
       showlegend: true,
-      height: 600
+      height: 600,
+      annotations: [
+        // 終局耐力 Pu (kN) → Line VI の水平線上に表示
+        {
+          x: (lineVI.gamma_end) * envelopeSign,
+          y: (lineVI.Load) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `Pu=${(lineVI.Load).toFixed(1)} kN`,
+          showarrow: true,
+          ax: 20, ay: -20,
+          font: {size: 12, color: 'purple'},
+          bgcolor: 'rgba(255,255,255,0.7)',
+          bordercolor: 'purple', borderwidth: 1
+        },
+        // 降伏耐力 Py (kN) と 降伏変位 δy (rad) → Py点に表示
+        {
+          x: (Py_gamma) * envelopeSign,
+          y: (Py) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `Py=${Py.toFixed(1)} kN\nδy=${Py_gamma.toExponential(2)} rad`,
+          showarrow: true,
+          ax: 20, ay: -40,
+          font: {size: 12, color: 'green'},
+          bgcolor: 'rgba(255,255,255,0.7)',
+          bordercolor: 'green', borderwidth: 1
+        },
+        // 終局変位 δu (rad) → Line V の終点付近に表示（結果の delta_u を使用）
+        {
+          x: (lineV.end.gamma) * envelopeSign,
+          y: (lineV.end.Load) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `δu=${delta_u.toExponential(2)} rad`,
+          showarrow: true,
+          ax: 20, ay: -20,
+          font: {size: 12, color: 'purple'},
+          bgcolor: 'rgba(255,255,255,0.7)',
+          bordercolor: 'purple', borderwidth: 1
+        },
+        // 最大耐力 Pmax (kN) → Pmax点に表示
+        {
+          x: (results.Pmax_gamma) * envelopeSign,
+          y: (Pmax) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `Pmax=${Pmax.toFixed(1)} kN`,
+          showarrow: true,
+          ax: 20, ay: -20,
+          font: {size: 12, color: 'red'},
+          bgcolor: 'rgba(255,255,255,0.7)',
+          bordercolor: 'red', borderwidth: 1
+        }
+      ]
     };
 
   Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, {editable: false, displayModeBar: true})
@@ -1372,6 +1422,14 @@
     document.getElementById('val_pu').textContent = r.Pu.toFixed(3);
     document.getElementById('val_du').textContent = (r.delta_u).toFixed(5) + ' rad';
     document.getElementById('val_mu').textContent = r.mu.toFixed(3);
+    // 構造特性係数 Ds = 1 / sqrt(2μ - 1)
+    let Ds = '-';
+    if(r.mu && r.mu > 0.5){ // 2μ-1 > 0 の領域のみ算出（μ>0.5）
+      const denom = Math.sqrt(2 * r.mu - 1);
+      if(denom > 0){ Ds = (1 / denom).toFixed(3); }
+    }
+    const dsEl = document.getElementById('val_ds');
+    if(dsEl) dsEl.textContent = Ds;
 
     document.getElementById('val_p0_a').textContent = r.p0_a.toFixed(3);
     document.getElementById('val_p0_b').textContent = r.p0_b.toFixed(3);
