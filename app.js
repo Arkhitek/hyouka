@@ -1,0 +1,789 @@
+// リネーム後: app.js (旧: app_jtccm.js)
+// 仕様はJTCCM準拠だがファイル名から jtccm 文字列を除去
+
+(function(){
+  'use strict';
+
+  // === State ===
+  let rawData = [];
+  let header = [];
+  let envelopeData = null;
+  let analysisResults = {};
+
+  // === Elements ===
+  const gammaInput = document.getElementById('gammaInput');
+  const loadInput = document.getElementById('loadInput');
+  const wall_length_m = document.getElementById('wall_length_m');
+  const test_method = document.getElementById('test_method');
+  const alpha_factor = document.getElementById('alpha_factor');
+  const n_samples = document.getElementById('n_samples');
+  const envelope_side = document.getElementById('envelope_side');
+  const processButton = document.getElementById('processButton');
+  const downloadCsvButton = document.getElementById('downloadCsvButton');
+  const downloadPngButton = document.getElementById('downloadPngButton');
+  const clearDataButton = document.getElementById('clearDataButton');
+  const plotDiv = document.getElementById('plot');
+
+  // ローカル(file://)でのCORS制約回避用: 組込サンプルCSV（fetch失敗時のフォールバック）
+  const BUILTIN_SAMPLE_CSV = `gamma,Load\n
+2.28743E-05,0
+8.52363E-05,0.42
+0.000109903,0.79
+0.000129205,1.23
+0.000204985,1.46
+0.000220261,1.91
+0.000272465,2.34
+0.000346011,2.77
+0.00039815,3.26
+0.000458278,3.76
+0.000584535,4.43
+0.000564155,4.61
+0.000711558,5.19
+0.000761398,5.77
+0.000871873,6.55
+0.000961902,7.23
+0.00105653,7.69
+0.001138636,8.32
+0.001247383,8.91
+0.001379134,9.76
+0.001195178,7.47
+0.000964071,5.79
+0.000792001,4.24
+0.00059316,2.62
+0.000385629,1.48
+0.000206401,0.45
+0.000163458,0
+9.06139E-05,-0.14
+0.000110605,-0.26
+9.68618E-05,-0.39
+6.81682E-05,-0.65
+5.90237E-05,-0.94
+3.57597E-05,-1.27
+3.52402E-05,-1.69
+-4.86582E-05,-2.17
+-0.00011441,-2.73
+-0.000192749,-3.36
+-0.000284246,-3.79
+-0.000332424,-4.16
+-0.000347505,-4.27
+-0.00041466,-4.73
+-0.000511015,-5.35
+-0.000574208,-5.81
+-0.000660341,-6.39
+-0.000715611,-6.79
+-0.000777271,-7.31
+-0.000868833,-7.67
+-0.000896631,-8.13
+-0.000980399,-8.69
+-0.000882121,-6.85
+-0.000740459,-5.25
+-0.000600525,-3.77
+-0.000398293,-2.34
+-0.000252098,-1.47
+-0.000246525,-0.73
+-0.000139493,-0.17
+-0.000166706,0
+-0.000100187,0.12
+-7.86507E-05,0.22
+-7.66633E-05,0.37
+-7.2182E-05,0.54
+2.81999E-05,0.77
+3.56169E-05,1.1
+0.000135102,1.64
+0.000199893,2.09
+0.000252864,2.51
+0.000335671,2.94
+0.000452537,3.81
+0.000494324,3.98
+0.000555919,4.56
+0.000683644,5.28
+0.000828683,6.01
+0.00089111,6.8
+0.001007014,7.47
+0.001136336,8.29
+0.00126962,9.2
+0.001365014,9.83
+0.001170966,7.73
+0.00100126,6.24`;
+
+  // === Events ===
+  gammaInput.addEventListener('input', handleDirectInput);
+  loadInput.addEventListener('input', handleDirectInput);
+  processButton.addEventListener('click', processData);
+  downloadCsvButton.addEventListener('click', downloadCsv);
+  downloadPngButton.addEventListener('click', downloadPng);
+  clearDataButton.addEventListener('click', clearInputData);
+
+
+  function clearInputData(){
+    gammaInput.value = '';
+    loadInput.value = '';
+    rawData = [];
+    envelopeData = null;
+    analysisResults = {};
+    processButton.disabled = true;
+    downloadCsvButton.disabled = true;
+    downloadPngButton.disabled = true;
+    plotDiv.innerHTML = '';
+    // 結果表示リセット
+    ['val_pmax','val_py','val_dy','val_K','val_pu','val_du','val_mu','val_p0_a','val_p0_b','val_p0_c','val_p0_d','val_p0','val_pa','val_magnification'].forEach(id=>{
+      const el = document.getElementById(id); if(el) el.textContent='-';
+    });
+  }
+
+  // === 起動時 sample.csv 自動読込のみ ===
+  function loadCsvText(text){
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    const pairs = [];
+    const numericRegex = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+    for(const line of lines){
+      const cols = line.split(/,|\t|;/).map(c=>c.trim());
+      if(cols.length < 2) continue;
+      if(!numericRegex.test(cols[0]) || !numericRegex.test(cols[1])) continue; // header/非数値は除外
+      pairs.push([parseFloat(cols[0]), parseFloat(cols[1])]);
+    }
+    if(pairs.length === 0){
+      console.warn('CSVに有効なデータがありません。');
+      return;
+    }
+    gammaInput.value = pairs.map(p=>p[0]).join('\n');
+    loadInput.value = pairs.map(p=>p[1]).join('\n');
+    handleDirectInput();
+  }
+
+  function autoLoadSample(){
+    fetch('sample.csv', {cache:'no-cache'})
+      .then(r => r.ok ? r.text() : Promise.reject(new Error('sample.csvが取得できません')))
+      .then(text => loadCsvText(text))
+      .catch(err => {
+        // file:// でのCORS制約時は組込サンプルへフォールバック
+        if(location && location.protocol === 'file:'){
+          console.warn('file:// での自動読込を組込サンプルにフォールバックします。詳細:', err.message);
+          loadCsvText(BUILTIN_SAMPLE_CSV);
+        } else {
+          console.warn('sample.csv 自動読込失敗:', err.message);
+        }
+      });
+  }
+
+  autoLoadSample();
+
+  // === Direct Input Handling ===
+  function handleDirectInput(){
+    const gammaText = gammaInput.value.trim();
+    const loadText = loadInput.value.trim();
+
+    if(!gammaText || !loadText) return; // どちらか空なら何もしない
+
+    try {
+      // 行単位に分割（カンマ区切り等があっても先に改行を優先）
+      const gammaLines = gammaText.split(/\r?\n/);
+      const loadLines  = loadText.split(/\r?\n/);
+
+      const pairCount = Math.min(gammaLines.length, loadLines.length);
+      const parsed = [];
+      let skipped = 0;
+
+      // 厳密な数値判定（単位や文字が付いた行は除外）
+      const isNumericString = (s) => /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(s);
+
+      for(let i=0; i<pairCount; i++){
+        const gStrRaw = gammaLines[i];
+        const lStrRaw = loadLines[i];
+        if(gStrRaw == null || lStrRaw == null){
+          skipped++; continue;
+        }
+        const gStr = gStrRaw.trim();
+        const lStr = lStrRaw.trim();
+        if(!gStr || !lStr){ // 空白行はスキップ
+          skipped++; continue;
+        }
+
+        // 数値文字列判定：行全体が数値であることを要求
+        if(!isNumericString(gStr) || !isNumericString(lStr)){
+          skipped++; continue; // 項目名など非数値行は無視
+        }
+
+        const gNum = parseFloat(gStr);
+        const lNum = parseFloat(lStr);
+
+        parsed.push({
+          Load: lNum,
+          gamma: gNum,
+          gamma0: gNum // 直接入力の場合は補正なし
+        });
+      }
+
+      if(parsed.length === 0){
+        console.warn('有効な数値データがありません。');
+        return;
+      }
+
+      rawData = parsed;
+      header = ['Load', 'gamma', 'gamma0'];
+      processButton.disabled = false;
+
+      if(skipped > 0){
+        console.info(`非数値または空白行を ${skipped} 行スキップしました。有効データ: ${parsed.length} 行`);
+      }
+
+      // 最低3点以上で自動解析（2点以下だと線形近似など不安定）
+      if(rawData.length >= 3){
+        setTimeout(() => processDataDirect(), 50);
+      }
+    } catch(err) {
+      console.error('データ解析エラー:', err);
+    }
+  }
+
+  // === Main Processing ===
+  function processData(){
+    try{
+      const L = parseFloat(wall_length_m.value);
+      const alpha = parseFloat(alpha_factor.value);
+      const n = parseInt(n_samples.value, 10);
+      const side = envelope_side.value;
+      const method = test_method.value;
+
+      if(!isFinite(L) || !isFinite(alpha) || !isFinite(n)){
+        alert('入力値が不正です。すべての数値を正しく入力してください。');
+        return;
+      }
+
+      // Direct input - data already has gamma and gamma0
+      const dataWithAngles = rawData;
+
+      // Step 2: Generate envelope
+      envelopeData = generateEnvelope(dataWithAngles, side);
+      if(envelopeData.length === 0){
+        alert('包絡線の生成に失敗しました。データを確認してください。');
+        return;
+      }
+
+      // Step 3: Calculate characteristic points
+      analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha, n);
+
+      // Step 4: Render results
+      renderPlot(envelopeData, analysisResults);
+      renderResults(analysisResults);
+
+      downloadCsvButton.disabled = false;
+      downloadPngButton.disabled = false;
+    }catch(error){
+      alert('計算エラーが発生しました: ' + error.message);
+      console.error(error);
+    }
+  }
+
+  // === Direct Input Processing ===
+  function processDataDirect(){
+    try{
+      const L = parseFloat(wall_length_m.value);
+      const alpha = parseFloat(alpha_factor.value);
+      const n = parseInt(n_samples.value, 10);
+      const side = envelope_side.value;
+      const method = test_method.value;
+
+      if(!isFinite(L) || !isFinite(alpha) || !isFinite(n)){
+        console.warn('入力値が不正です');
+        return;
+      }
+
+      // Generate envelope from direct input data
+      envelopeData = generateEnvelope(rawData, side);
+      if(envelopeData.length === 0){
+        console.warn('包絡線の生成に失敗しました');
+        return;
+      }
+
+      // Calculate characteristic points
+      analysisResults = calculateJTCCMMetrics(envelopeData, method, L, alpha, n);
+
+      // Render results
+      renderPlot(envelopeData, analysisResults);
+      renderResults(analysisResults);
+
+      downloadCsvButton.disabled = false;
+      downloadPngButton.disabled = false;
+    }catch(error){
+      console.error('計算エラー:', error);
+    }
+  }
+
+
+
+  // === Envelope Generation (Section II.3) ===
+  function generateEnvelope(data, side){
+    // Filter data based on selected side
+    let filteredData;
+    if(side === 'positive'){
+      // Positive side: both gamma and Load must be positive
+      filteredData = data.filter(pt => pt.gamma >= 0 && pt.Load >= 0);
+    } else {
+      // Negative side: both gamma and Load must be negative
+      filteredData = data.filter(pt => pt.gamma <= 0 && pt.Load <= 0);
+    }
+    
+    // Do NOT sort - process in original order
+    if(filteredData.length === 0) return [];
+    
+    // Build envelope based on maximum deformation (gamma)
+    const env = [];
+    let maxAbsGamma = 0;
+    
+    for(const pt of filteredData){
+      const absGamma = Math.abs(pt.gamma);
+      
+      // Keep point if it has larger deformation than previous maximum
+      if(absGamma >= maxAbsGamma){
+        maxAbsGamma = absGamma;
+        env.push({...pt});
+      }
+    }
+    
+    // If envelope is still empty, return the filtered data
+    if(env.length === 0 && filteredData.length > 0){
+      return filteredData;
+    }
+    
+    // Additional safety check
+    if(env.length === 0){
+      console.error('包絡線が空です。データを確認してください。', {side, dataCount: data.length, filteredCount: filteredData.length});
+    }
+    
+    return env;
+  }
+
+  // === JTCCM Metrics Calculation (Sections III, IV, V) ===
+  function calculateJTCCMMetrics(envelope, method, L, alpha, n){
+    const results = {};
+
+    // Determine the sign of the envelope (positive or negative side)
+    const envelopeSign = envelope[0] && envelope[0].Load < 0 ? -1 : 1;
+
+    // Find Pmax (Section III.1)
+    const Pmax = envelope.reduce((max, pt) => (Math.abs(pt.Load) > Math.abs(max.Load) ? pt : max), envelope[0]);
+    results.Pmax = Math.abs(Pmax.Load);
+    results.Pmax_gamma = Math.abs(Pmax.gamma);
+
+    // Calculate Py using Line Method (Section III.1)
+    const Py_result = calculatePy_LineMethod(envelope, results.Pmax);
+    results.Py = Py_result.Py;
+    results.Py_gamma = Py_result.Py_gamma;
+    results.lineI = Py_result.lineI;
+    results.lineII = Py_result.lineII;
+    results.lineIII = Py_result.lineIII;
+
+    // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
+    const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, results.Pmax);
+    Object.assign(results, Pu_result);
+
+    // Calculate P0 (Section V.1)
+    const P0_result = calculateP0(results, envelope, method);
+    Object.assign(results, P0_result);
+
+    // Calculate Pa and Magnification (Section V.2, V.3)
+    results.Pa = results.P0 * alpha;
+    results.magnification = results.Pa / (L * 1.96);
+    results.magnification_rounded = Math.floor(results.magnification * 10) / 10; // Round down to 0.1
+
+    return results;
+  }
+
+  // === Py Calculation (Line Method - Section III.1) ===
+  function calculatePy_LineMethod(envelope, Pmax){
+    const p_max = Pmax;
+
+    // Find points at 0.1, 0.4, 0.9 Pmax (using absolute values)
+    const p01 = findPointAtLoad(envelope, 0.1 * p_max);
+    const p04 = findPointAtLoad(envelope, 0.4 * p_max);
+    const p09 = findPointAtLoad(envelope, 0.9 * p_max);
+
+    if(!p01 || !p04 || !p09) throw new Error('0.1/0.4/0.9 Pmax の点が見つかりません');
+
+    // Use absolute values for gamma as well
+    const gamma01 = Math.abs(p01.gamma);
+    const gamma04 = Math.abs(p04.gamma);
+    const gamma09 = Math.abs(p09.gamma);
+    const load01 = Math.abs(p01.Load);
+    const load04 = Math.abs(p04.Load);
+    const load09 = Math.abs(p09.Load);
+
+    // Line I: 0.1 Pmax - 0.4 Pmax
+    const lineI = {
+      slope: (load04 - load01) / (gamma04 - gamma01),
+      intercept: load01 - ((load04 - load01) / (gamma04 - gamma01)) * gamma01
+    };
+
+    // Line II: 0.4 Pmax - 0.9 Pmax
+    const lineII = {
+      slope: (load09 - load04) / (gamma09 - gamma04),
+      intercept: load04 - ((load09 - load04) / (gamma09 - gamma04)) * gamma04
+    };
+
+    // Line III: Parallel to Line II, tangent to envelope
+    const lineIII = findTangentLine(envelope, lineII.slope);
+
+    // Intersection of Line I and Line III
+    const gamma_py = (lineIII.intercept - lineI.intercept) / (lineI.slope - lineIII.slope);
+    const Py = lineI.slope * gamma_py + lineI.intercept;
+
+    return { Py, Py_gamma: gamma_py, lineI, lineII, lineIII };
+  }
+
+  function findPointAtLoad(envelope, targetLoad){
+    for(let i=0; i<envelope.length-1; i++){
+      const p1 = envelope[i];
+      const p2 = envelope[i+1];
+      const abs1 = Math.abs(p1.Load);
+      const abs2 = Math.abs(p2.Load);
+      
+      if(abs1 <= targetLoad && abs2 >= targetLoad){
+        const ratio = (targetLoad - abs1) / (abs2 - abs1);
+        return {
+          Load: p1.Load + (p2.Load - p1.Load) * ratio,
+          gamma: p1.gamma + (p2.gamma - p1.gamma) * ratio,
+          gamma0: p1.gamma0 + (p2.gamma0 - p1.gamma0) * ratio
+        };
+      }
+    }
+    return envelope[envelope.length - 1]; // Fallback
+  }
+
+  function findTangentLine(envelope, slope){
+    // Find the point where (|Load| - slope * |gamma|) is maximum
+    let maxIntercept = -Infinity;
+    for(const pt of envelope){
+      const intercept = Math.abs(pt.Load) - slope * Math.abs(pt.gamma);
+      if(intercept > maxIntercept) maxIntercept = intercept;
+    }
+    return { slope, intercept: maxIntercept };
+  }
+
+  // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
+  function calculatePu_EnergyEquivalent(envelope, Py, Pmax){
+    // Find δy (gamma where Load = Py on envelope)
+    const pt_y = findPointAtLoad(envelope, Py);
+    const delta_y = Math.abs(pt_y.gamma);
+
+    // Initial stiffness K
+    const K = Py / delta_y;
+
+    // Find δu (Section IV.1 Step 9)
+    const delta_u_candidate1 = findDeltaU_08Pmax(envelope, Pmax);
+    const delta_u_candidate2 = 1/15; // rad
+    const delta_u = Math.min(delta_u_candidate1, delta_u_candidate2);
+
+    // Calculate area S under envelope up to δu
+    const S = calculateAreaUnderEnvelope(envelope, delta_u);
+
+    // Solve for Pu using energy equivalence (Section IV.1 Step 11-12)
+    // S = Pu * (δu - δv/2), where δv = Pu/K
+    // S = Pu * δu - Pu²/(2K)
+    // Pu²/(2K) - Pu*δu + S = 0
+    // Pu = K*δu - sqrt((K*δu)² - 2*K*S)
+    const discriminant = Math.pow(K * delta_u, 2) - 2 * K * S;
+    if(discriminant < 0){
+      console.warn('Pu計算で判別式が負: discriminant =', discriminant);
+      // Fallback: use Py
+      return {
+        delta_y, K, delta_u, S,
+        Pu: Py,
+        delta_v: delta_y,
+        mu: delta_u / delta_y,
+        lineV: {start: {gamma:0, Load:0}, end: {gamma: delta_y, Load: Py}},
+        lineVI: {gamma_start: delta_y, gamma_end: delta_u, Load: Py}
+      };
+    }
+
+    const Pu = K * delta_u - Math.sqrt(discriminant);
+    const delta_v = Pu / K;
+    const mu = delta_u / delta_v;
+
+    // Lines for visualization
+    const lineV = {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
+    const lineVI = {gamma_start: delta_v, gamma_end: delta_u, Load: Pu};
+
+    return { delta_y, K, delta_u, S, Pu, delta_v, mu, lineV, lineVI };
+  }
+
+  function findDeltaU_08Pmax(envelope, Pmax){
+    const threshold = 0.8 * Pmax;
+    let delta_u = Math.abs(envelope[envelope.length - 1].gamma);
+    
+    // Find first point after Pmax where Load < 0.8Pmax
+    let passedMax = false;
+    for(const pt of envelope){
+      if(Math.abs(pt.Load) >= Pmax * 0.99) passedMax = true;
+      if(passedMax && Math.abs(pt.Load) < threshold){
+        delta_u = Math.abs(pt.gamma);
+        break;
+      }
+    }
+    return delta_u;
+  }
+
+  function calculateAreaUnderEnvelope(envelope, delta_limit){
+    let area = 0;
+    let prev = null;
+    for(const pt of envelope){
+      const absGamma = Math.abs(pt.gamma);
+      if(absGamma > delta_limit){
+        if(prev && Math.abs(prev.gamma) < delta_limit){
+          // Interpolate to delta_limit
+          const ratio = (delta_limit - Math.abs(prev.gamma)) / (absGamma - Math.abs(prev.gamma));
+          const load_at_limit = Math.abs(prev.Load) + (Math.abs(pt.Load) - Math.abs(prev.Load)) * ratio;
+          area += (delta_limit - Math.abs(prev.gamma)) * (Math.abs(prev.Load) + load_at_limit) / 2;
+        }
+        break;
+      }
+      if(prev){
+        const dg = absGamma - Math.abs(prev.gamma);
+        const avg_load = (Math.abs(prev.Load) + Math.abs(pt.Load)) / 2;
+        area += dg * avg_load;
+      }
+      prev = pt;
+    }
+    return area;
+  }
+
+  // === P0 Calculation (Section V.1) ===
+  function calculateP0(results, envelope, method){
+    const { Py, Pu, mu, Pmax } = results;
+
+    // (a) Yield strength
+    const p0_a = Py;
+
+    // (b) Ductility-based
+    let p0_b;
+    const denom = 2 * mu - 1;
+    if(denom > 0){
+      // Pu / (1/ sqrt(2μ - 1)) * 0.2 = 0.2 * Pu * sqrt(2μ - 1)
+      p0_b = 0.2 * Pu * Math.sqrt(denom);
+    }else{
+      // フォールバック（定義域外の場合は Py を採用）
+      p0_b = Py;
+    }
+
+    // (c) Max strength
+    const p0_c = Pmax * (2/3);
+
+    // (d) Specific deformation
+    let p0_d;
+    if(method === 'loaded'){
+      // γ @ 1/120 rad
+      const pt = findPointAtGamma(envelope, 1/120, 'gamma');
+      p0_d = pt ? Math.abs(pt.Load) : Pmax;
+    }else{
+      // γ0 @ 1/150 rad
+      const pt = findPointAtGamma(envelope, 1/150, 'gamma0');
+      p0_d = pt ? Math.abs(pt.Load) : Pmax;
+    }
+
+    const P0 = Math.min(p0_a, p0_b, p0_c, p0_d);
+
+    return { p0_a, p0_b, p0_c, p0_d, P0 };
+  }
+
+  function findPointAtGamma(envelope, targetGamma, key){
+    for(let i=0; i<envelope.length-1; i++){
+      const p1 = envelope[i];
+      const p2 = envelope[i+1];
+      const abs1 = Math.abs(p1[key]);
+      const abs2 = Math.abs(p2[key]);
+      
+      if(abs1 <= targetGamma && abs2 >= targetGamma){
+        const ratio = (targetGamma - abs1) / (abs2 - abs1);
+        return {
+          Load: Math.abs(p1.Load) + (Math.abs(p2.Load) - Math.abs(p1.Load)) * ratio,
+          gamma: p1.gamma + (p2.gamma - p1.gamma) * ratio,
+          gamma0: p1.gamma0 + (p2.gamma0 - p1.gamma0) * ratio
+        };
+      }
+    }
+    return envelope[envelope.length - 1];
+  }
+
+  // === Rendering ===
+  function renderPlot(envelope, results){
+    const { Pmax, Py, Py_gamma, lineI, lineII, lineIII, lineV, lineVI, delta_u, p0_a, p0_b, p0_c, p0_d } = results;
+
+    // Determine envelope sign based on the data
+    const envelopeSign = envelope[0] && envelope[0].Load < 0 ? -1 : 1;
+
+  // Calculate data range for auto-fitting (use rad)
+  const allGammas = rawData.map(pt => pt.gamma); // rad
+    const allLoads = rawData.map(pt => pt.Load); // kN
+    
+    const minGamma = Math.min(...allGammas);
+    const maxGamma = Math.max(...allGammas);
+    const minLoad = Math.min(...allLoads);
+    const maxLoad = Math.max(...allLoads);
+    
+    // Add 10% margin for better visibility
+    const gammaMargin = (maxGamma - minGamma) * 0.1;
+    const loadMargin = (maxLoad - minLoad) * 0.1;
+
+    // Original raw data (all points) - showing positive and negative loads
+    const trace_rawdata = {
+      x: rawData.map(pt => pt.gamma), // rad
+      y: rawData.map(pt => pt.Load), // Keep original sign
+      mode: 'lines+markers',
+      name: '実験データ',
+      line: {color: 'lightblue', width: 1},
+      marker: {color: 'lightblue', size: 4}
+    };
+
+    // Envelope line - keep original sign
+    const trace_env = {
+      x: envelope.map(pt => pt.gamma),
+      y: envelope.map(pt => pt.Load), // Keep original sign from filtered data
+      mode: 'lines',
+      name: '包絡線',
+      line: {color: 'blue', width: 2}
+    };
+
+    // Envelope points (requested) - show the sampled points composing the envelope
+    const trace_env_points = {
+      x: envelope.map(pt => pt.gamma),
+      y: envelope.map(pt => pt.Load),
+      mode: 'markers',
+      name: '包絡線点',
+      marker: {color: 'blue', size: 6, symbol: 'circle', line: {color: 'white', width: 1}}
+    };
+
+    // Line I, II, III (Py determination)
+    const gamma_range = [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma)))]
+    ;
+    const trace_lineI = makeLine(lineI, gamma_range, 'Line I (0.1-0.4Pmax)', 'orange', envelopeSign);
+    const trace_lineIII = makeLine(lineIII, gamma_range, 'Line III (接線)', 'red', envelopeSign);
+
+    // Py point
+    const trace_py = {
+      x: [Py_gamma * envelopeSign],
+      y: [Py * envelopeSign],
+      mode: 'markers',
+      name: 'Py (降伏耐力)',
+      marker: {color: 'green', size: 12, symbol: 'circle'}
+    };
+
+    // Perfect elasto-plastic model (Line V, VI)
+    const trace_lineV = {
+      x: [0, lineV.end.gamma * envelopeSign],
+      y: [0, lineV.end.Load * envelopeSign],
+      mode: 'lines',
+      name: 'Line V (初期剛性)',
+      line: {color: 'purple', width: 2, dash: 'dash'}
+    };
+
+    const trace_lineVI = {
+      x: [lineVI.gamma_start * envelopeSign, lineVI.gamma_end * envelopeSign],
+      y: [lineVI.Load * envelopeSign, lineVI.Load * envelopeSign],
+      mode: 'lines',
+      name: 'Line VI (Pu)',
+      line: {color: 'purple', width: 2, dash: 'dash'}
+    };
+
+    // Pmax
+    const trace_pmax = {
+      x: [results.Pmax_gamma * envelopeSign],
+      y: [Pmax * envelopeSign],
+      mode: 'markers',
+      name: 'Pmax',
+      marker: {color: 'red', size: 12, symbol: 'star'}
+    };
+
+    // P0 criteria lines
+  const gamma_max = Math.max(...envelope.map(pt => Math.abs(pt.gamma)));
+    const trace_p0_lines = {
+      x: [0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign],
+      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, p0_d * envelopeSign, p0_d * envelopeSign],
+      mode: 'lines',
+      name: 'P0基準 (a,b,c,d)',
+      line: {color: 'gray', width: 1, dash: 'dot'}
+    };
+
+    const layout = {
+      title: '荷重-変形関係と評価直線（JTCCM準拠）',
+      xaxis: {
+        title: '見掛けのせん断変形角 γ (rad)',
+        range: [minGamma - gammaMargin, maxGamma + gammaMargin]
+      },
+      yaxis: {
+        title: '荷重 P (kN)',
+        range: [minLoad - loadMargin, maxLoad + loadMargin]
+      },
+      hovermode: 'closest',
+      showlegend: true,
+      height: 600
+    };
+
+  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout);
+  }
+
+  function makeLine(lineObj, gamma_range, name, color, sign = 1){
+    const x = gamma_range.map(g => g * sign);
+    const y = gamma_range.map(g => (lineObj.slope * g + lineObj.intercept) * sign);
+    return {
+      x, y,
+      mode: 'lines',
+      name,
+      line: {color, width: 1, dash: 'dash'}
+    };
+  }
+
+  function renderResults(r){
+    document.getElementById('val_pmax').textContent = r.Pmax.toFixed(3);
+    document.getElementById('val_py').textContent = r.Py.toFixed(3);
+    document.getElementById('val_dy').textContent = (r.delta_y).toFixed(5) + ' rad';
+    document.getElementById('val_K').textContent = r.K.toFixed(2);
+    document.getElementById('val_pu').textContent = r.Pu.toFixed(3);
+    document.getElementById('val_du').textContent = (r.delta_u).toFixed(5) + ' rad';
+    document.getElementById('val_mu').textContent = r.mu.toFixed(3);
+
+    document.getElementById('val_p0_a').textContent = r.p0_a.toFixed(3);
+    document.getElementById('val_p0_b').textContent = r.p0_b.toFixed(3);
+    document.getElementById('val_p0_c').textContent = r.p0_c.toFixed(3);
+    document.getElementById('val_p0_d').textContent = r.p0_d.toFixed(3);
+    document.getElementById('val_p0').textContent = r.P0.toFixed(3);
+
+    document.getElementById('val_pa').textContent = r.Pa.toFixed(3);
+    document.getElementById('val_magnification').textContent = r.magnification_rounded.toFixed(1) + ' 倍';
+  }
+
+  function downloadCsv(){
+    const r = analysisResults;
+    const csvContent = [
+      ['項目', '値', '単位'],
+      ['最大耐力 Pmax', r.Pmax.toFixed(4), 'kN'],
+      ['降伏耐力 Py', r.Py.toFixed(4), 'kN'],
+      ['降伏変位 δy', (r.delta_y).toFixed(6), 'rad'],
+      ['初期剛性 K', r.K.toFixed(4), 'kN/rad'],
+      ['終局耐力 Pu', r.Pu.toFixed(4), 'kN'],
+      ['終局変位 δu', (r.delta_u).toFixed(6), 'rad'],
+      ['塑性率 μ', r.mu.toFixed(4), ''],
+      ['P0(a) 降伏耐力', r.p0_a.toFixed(4), 'kN'],
+      ['P0(b) 靭性基準', r.p0_b.toFixed(4), 'kN'],
+      ['P0(c) 最大耐力基準', r.p0_c.toFixed(4), 'kN'],
+      ['P0(d) 特定変形時', r.p0_d.toFixed(4), 'kN'],
+      ['短期基準せん断耐力 P0', r.P0.toFixed(4), 'kN'],
+      ['短期許容せん断耐力 Pa', r.Pa.toFixed(4), 'kN'],
+      ['壁倍率', r.magnification_rounded.toFixed(1), '倍']
+    ];
+    
+    const csvString = csvContent.map(e => e.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csvString], {type: 'text/csv;charset=utf-8;'});
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'Results.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function downloadPng(){
+    Plotly.downloadImage(plotDiv, {format:'png', width:1200, height:700, filename:'Graph'});
+  }
+})();
