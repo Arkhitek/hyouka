@@ -7,9 +7,37 @@
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js" integrity="sha512-1G7bVQtevrWxppIqh+apMI2vlA38nSxrdbidKdvUSsfxUSttPmxGfBoZpWjgs97YPned3KcUuoQW1fvjM1uGdw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- ExcelJS: SRIは環境差で失敗することがあるため integrity を外し、動的フォールバックを用意 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js" crossorigin="anonymous"></script>
+  <script>
+    // フォールバック: ExcelJSが読み込めなければ jsDelivr から再読込
+    (function(){
+      function ensureExcelJS(){
+        if(window.ExcelJS) return;
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js';
+        s.onload = function(){ console.info('ExcelJS loaded via jsDelivr fallback'); };
+        s.onerror = function(){ console.warn('ExcelJS fallback load failed'); };
+        document.head.appendChild(s);
+      }
+      // DOM準備後にチェック
+      if(document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', ensureExcelJS);
+      } else {
+        ensureExcelJS();
+      }
+    })();
+  </script>
 </head>
 <body>
+    <header class="header" role="banner">
+      <div class="header-inner">
+        <picture>
+          <source srcset="./arkhitek_logo.png" type="image/png" />
+          <img src="./logo_arkhitek.svg" class="header-logo" alt="Arkhitek ロゴ" />
+        </picture>
+      </div>
+    </header>
   <h1>木造耐力壁性能評価プログラム</h1>
   <p class="subtitle">木造耐力壁及びその倍率の試験・評価業務方法書に準拠</p>
 
