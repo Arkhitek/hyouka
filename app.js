@@ -1293,19 +1293,37 @@
   }
 
   function findDeltaU_08Pmax(envelope, Pmax){
-    const threshold = 0.8 * Pmax;
-    let delta_u = Math.abs(envelope[envelope.length - 1].gamma);
-    
-    // Find first point after Pmax where Load < 0.8Pmax
-    let passedMax = false;
-    for(const pt of envelope){
-      if(Math.abs(pt.Load) >= Pmax * 0.99) passedMax = true;
-      if(passedMax && Math.abs(pt.Load) < threshold){
-        delta_u = Math.abs(pt.gamma);
-        break;
+    if(!envelope || envelope.length < 2 || !Number.isFinite(Pmax)){
+      return 0;
+    }
+    const threshold = 0.8 * Math.abs(Pmax);
+
+    // Pmax（|Load|最大）のインデックスを取得
+    let idxMax = 0;
+    let maxAbsLoad = -Infinity;
+    for(let i=0; i<envelope.length; i++){
+      const a = Math.abs(envelope[i].Load);
+      if(a > maxAbsLoad){ maxAbsLoad = a; idxMax = i; }
+    }
+
+    // Pmax以降の区間で |Load| が閾値を上から下へ横切る点を線形補間で求める
+    for(let i=idxMax; i<envelope.length-1; i++){
+      const p1 = envelope[i];
+      const p2 = envelope[i+1];
+      const y1 = Math.abs(p1.Load);
+      const y2 = Math.abs(p2.Load);
+      if(y1 >= threshold && y2 <= threshold){
+        const dy = (y2 - y1);
+        const t = dy !== 0 ? (threshold - y1) / dy : 0; // 0..1 にクリップ
+        const tClamped = Math.max(0, Math.min(1, t));
+        const g1 = Math.abs(p1.gamma);
+        const g2 = Math.abs(p2.gamma);
+        return g1 + (g2 - g1) * tClamped;
       }
     }
-    return delta_u;
+
+    // 横切りが見つからない場合は、終点の |γ| を返す（上限扱い）
+    return Math.abs(envelope[envelope.length - 1].gamma);
   }
 
   function calculateAreaUnderEnvelope(envelope, delta_limit){
