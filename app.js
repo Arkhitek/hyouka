@@ -583,15 +583,38 @@
 
       // Render Plotly graph to temporary container
       const pdfPlotDiv = container.querySelector('#pdf-plot');
-      const pdfLayout = {
+      
+      // Create simplified annotations for PDF (label only, no values)
+      const simplifiedAnnotations = plotDiv.layout.annotations ? plotDiv.layout.annotations.map(ann => {
+        // Extract label from text (remove values and units)
+        let simplifiedText = '';
+        if(ann.text.includes('δu=')) simplifiedText = 'δu';
+        else if(ann.text.includes('δy=')) simplifiedText = 'δy';
+        else if(ann.text.includes('Py=')) simplifiedText = 'Py';
+        else if(ann.text.includes('Pu=')) simplifiedText = 'Pu';
+        else if(ann.text.includes('δv=')) simplifiedText = 'δv';
+        else if(ann.text.includes('Pmax=')) simplifiedText = 'Pmax';
+        else if(ann.text.includes('γs=')) simplifiedText = 'γs';
+        else if(ann.text.includes('P0(')) return ann; // Keep P0 annotations as-is but they're likely filtered out
+        else return ann;
+        
+        return {
+          ...ann,
+          text: simplifiedText,
+          font: {...ann.font, size: 10},
+          ax: ann.ax ? ann.ax * 0.7 : 0,
+          ay: ann.ay ? ann.ay * 0.7 : 0
+        };
+      }) : [];
+      
+      await Plotly.newPlot(pdfPlotDiv, plotDiv.data, {
         ...plotDiv.layout,
         width: 760,
         height: 400,
         margin: {l:60, r:20, t:40, b:60},
         showlegend: false,
-        annotations: [] // PDFでは注釈を非表示
-      };
-      await Plotly.newPlot(pdfPlotDiv, plotDiv.data, pdfLayout, {displayModeBar: false});
+        annotations: simplifiedAnnotations
+      }, {displayModeBar: false});
 
       // Convert to image using html2canvas
       const canvas = await html2canvas(container, {
