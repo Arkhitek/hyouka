@@ -19,6 +19,8 @@
   // === Elements ===
   const gammaInput = document.getElementById('gammaInput');
   const loadInput = document.getElementById('loadInput');
+  const pasteGammaButton = document.getElementById('pasteGammaButton');
+  const pasteLoadButton = document.getElementById('pasteLoadButton');
   const wall_length_m = document.getElementById('wall_length_m');
   const specific_deformation = document.getElementById('specific_deformation');
   const alpha_factor = document.getElementById('alpha_factor');
@@ -398,6 +400,52 @@
   // === Events ===
   gammaInput.addEventListener('input', handleDirectInput);
   loadInput.addEventListener('input', handleDirectInput);
+  async function pasteFromClipboard(target){
+    try{
+      const text = await navigator.clipboard.readText();
+      if(!text){ alert('クリップボードにテキストがありません'); return; }
+      const raw = text.trim();
+      const lines = raw.split(/\r?\n/).filter(l => l.trim().length>0);
+      // 区切り検出: タブ優先、なければカンマ
+      const hasTab = lines.some(l => l.includes('\t'));
+      const hasComma = !hasTab && lines.some(l => l.includes(','));
+      const sep = hasTab ? '\t' : (hasComma ? ',' : null);
+      // 数値判定
+      const isNumericString = (s) => /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(s.trim());
+      let filledBoth = false;
+      if(sep){
+        const gCol = [];
+        const lCol = [];
+        lines.forEach(l => {
+          const parts = l.split(new RegExp(sep)).map(s=>s.trim());
+          if(parts.length >= 2 && isNumericString(parts[0]) && isNumericString(parts[1])){
+            gCol.push(parts[0]);
+            lCol.push(parts[1]);
+          }
+        });
+        if(gCol.length > 0 && lCol.length === gCol.length){
+          gammaInput.value = gCol.join('\n');
+          loadInput.value = lCol.join('\n');
+          filledBoth = true;
+        }
+      }
+      if(!filledBoth){
+        // 単一列として、押下対象のみ置換
+        if(target === 'gamma'){
+          gammaInput.value = lines.join('\n');
+        }else{
+          loadInput.value = lines.join('\n');
+        }
+      }
+      // 解析試行（どちらか空なら内部で早期return）
+      handleDirectInput();
+    }catch(err){
+      console.warn('クリップボード読み取り失敗', err);
+      alert('クリップボードの読み取りに失敗しました（ブラウザ許可を確認）');
+    }
+  }
+  if(pasteGammaButton){ pasteGammaButton.addEventListener('click', () => pasteFromClipboard('gamma')); }
+  if(pasteLoadButton){ pasteLoadButton.addEventListener('click', () => pasteFromClipboard('load')); }
   // 手動ボタン削除済み: processButton クリックイベント不要
 
   // パラメータ変更時の自動解析
