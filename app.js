@@ -258,8 +258,18 @@
         // 選択点と次の点の中間値を計算
         const pt1 = envelopeData[idx];
         const pt2 = envelopeData[idx + 1];
-        const midGamma = (pt1.gamma + pt2.gamma) / 2;
-        const midLoad = (pt1.Load + pt2.Load) / 2;
+        let midGamma = (pt1.gamma + pt2.gamma) / 2;
+        let midLoad = (pt1.Load + pt2.Load) / 2;
+        
+        // 実験データ折れ線への吸着処理（側面判定: 荷重符号で判断）
+        if(rawData && rawData.length > 1){
+          const side = midLoad >= 0 ? 'positive' : 'negative';
+          const snapped = snapToNearestRawDataSegment(midGamma, midLoad, rawData, side);
+          if(snapped){
+            midGamma = snapped.gamma;
+            midLoad = snapped.Load;
+          }
+        }
         
         // 履歴に保存
         pushHistory(envelopeData);
@@ -2729,6 +2739,78 @@
     const closestY = y1 + t * dy;
     
     return Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
+  }
+
+  // データ座標系での実験データ線分への吸着処理
+  function snapToNearestRawDataSegment(gamma, load, rawData, side){
+    try{
+      if(!rawData || rawData.length < 2) return null;
+      
+      // 側面でフィルタリング（positive: gamma >= 0, negative: gamma <= 0）
+      const filteredData = side === 'positive' 
+        ? rawData.filter(pt => pt.gamma >= 0 && pt.Load >= 0)
+        : rawData.filter(pt => pt.gamma <= 0 && pt.Load <= 0);
+      
+      if(filteredData.length < 2) return null;
+      
+      let bestSegmentIndex = -1;
+      let bestDistance = Infinity;
+      let bestT = 0;
+      
+      // 全線分を走査して最小距離のものを探す
+      for(let i = 0; i < filteredData.length - 1; i++){
+        const p1 = filteredData[i];
+        const p2 = filteredData[i + 1];
+        
+        const g1 = p1.gamma, l1 = p1.Load;
+        const g2 = p2.gamma, l2 = p2.Load;
+        
+        if(!Number.isFinite(g1) || !Number.isFinite(l1) || !Number.isFinite(g2) || !Number.isFinite(l2)) continue;
+        
+        // 線分のベクトル
+        const dx = g2 - g1;
+        const dy = l2 - l1;
+        const lengthSq = dx * dx + dy * dy;
+        
+        if(lengthSq === 0) continue; // 長さ0の線分はスキップ
+        
+        // 点から線分への投影パラメータt (0 <= t <= 1)
+        let t = ((gamma - g1) * dx + (load - l1) * dy) / lengthSq;
+        t = Math.max(0, Math.min(1, t));
+        
+        // 線分上の最近点
+        const closestGamma = g1 + t * dx;
+        const closestLoad = l1 + t * dy;
+        
+        // 距離を計算
+        const distance = Math.sqrt(
+          (gamma - closestGamma) * (gamma - closestGamma) + 
+          (load - closestLoad) * (load - closestLoad)
+        );
+        
+        if(distance < bestDistance){
+          bestDistance = distance;
+          bestSegmentIndex = i;
+          bestT = t;
+        }
+      }
+      
+      // 最も近い線分が見つかった場合、その線分上の点を返す
+      if(bestSegmentIndex >= 0){
+        const p1 = filteredData[bestSegmentIndex];
+        const p2 = filteredData[bestSegmentIndex + 1];
+        
+        return {
+          gamma: p1.gamma + bestT * (p2.gamma - p1.gamma),
+          Load: p1.Load + bestT * (p2.Load - p1.Load)
+        };
+      }
+      
+      return null; // 吸着に失敗
+    }catch(err){
+      console.warn('snapToNearestRawDataSegment エラー:', err);
+      return null;
+    }
   }
 
   // 実験データ折れ線に対する最近傍点を探索し、ピクセル距離がthresholdPx以下ならデータ座標を返す
