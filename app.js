@@ -46,6 +46,24 @@
   const editLoadInput = document.getElementById('edit_load');
   const applyPointEditButton = document.getElementById('applyPointEdit');
   const cancelPointEditButton = document.getElementById('cancelPointEdit');
+  const toggleDragModeButton = document.getElementById('toggleDragMode');
+
+  // ドラッグモードの状態（グローバル変数）
+  let isDragModeEnabled = false;
+
+  // トグルボタンのイベントハンドラ
+  if(toggleDragModeButton){
+    toggleDragModeButton.onclick = function(){
+      isDragModeEnabled = !isDragModeEnabled;
+      if(isDragModeEnabled){
+        toggleDragModeButton.textContent = 'マウスドラッグ移動OFF';
+        toggleDragModeButton.style.background = '#f44336'; // 赤
+      } else {
+        toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
+        toggleDragModeButton.style.background = '#4CAF50'; // 緑
+      }
+    };
+  }
 
   // 履歴管理 (Undo/Redo)
   let historyStack = [];
@@ -2430,11 +2448,10 @@
       }
     });
     
-    // マウスダウン: Ctrl+Shift 押下中かつ包絡線点上ならドラッグ開始
+    // マウスダウン: ドラッグモードが有効かつ包絡線点上ならドラッグ開始
     let mousedownHandler = function(e){
-      // Ctrl+Shift 同時押しでのみドラッグ開始（Mac の command 対応は ctrlKey 優先）
-      const ctrlOrMeta = e.ctrlKey || e.metaKey;
-      if(!(ctrlOrMeta && e.shiftKey)) return;
+      // ドラッグモードがOFFの場合は何もしない
+      if(!isDragModeEnabled) return;
       
       // 選択中の点が存在しない場合はドラッグ不可
       if(window._selectedEnvelopePoint < 0 || !editableEnvelope || window._selectedEnvelopePoint >= editableEnvelope.length){
@@ -2468,8 +2485,6 @@
         shiftDragStartX = clickX;
         shiftDragStartY = clickY;
         plotDiv.style.cursor = 'move';
-        
-        // Plotlyデフォルトのズーム/パンはイベント抑止で無効化（dragmodeの変更は行わない）
         
         // ツールチップ表示
         if(pointTooltip){
