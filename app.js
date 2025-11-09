@@ -1234,6 +1234,23 @@
     return envelope[envelope.length - 1]; // Fallback
   }
 
+  function findLoadAtGamma(envelope, targetGamma){
+    // γ位置での荷重を線形補間で取得
+    const absTarget = Math.abs(targetGamma);
+    for(let i=0; i<envelope.length-1; i++){
+      const p1 = envelope[i];
+      const p2 = envelope[i+1];
+      const g1 = Math.abs(p1.gamma);
+      const g2 = Math.abs(p2.gamma);
+      
+      if(g1 <= absTarget && g2 >= absTarget){
+        const ratio = (absTarget - g1) / (g2 - g1);
+        return Math.abs(p1.Load) + (Math.abs(p2.Load) - Math.abs(p1.Load)) * ratio;
+      }
+    }
+    return Math.abs(envelope[envelope.length - 1].Load); // Fallback
+  }
+
   function findTangentLine(envelope, slope){
     // Find the point where (|Load| - slope * |gamma|) is maximum
     let maxIntercept = -Infinity;
