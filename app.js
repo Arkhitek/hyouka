@@ -1058,6 +1058,12 @@
         return;
       }
 
+      // 包絡線点の間引き（表示・編集用）: 最大50点
+      if(envelopeData.length > 50){
+        envelopeData = thinEnvelope(envelopeData, 50);
+        console.info('[thinEnvelope] 包絡線点を '+envelopeData.length+' 点に間引きました');
+      }
+
       // Calculate characteristic points
       analysisResults = calculateJTCCMMetrics(envelopeData, gamma_specific, delta_u_max, L, alpha, c0);
 
@@ -1079,6 +1085,78 @@
 
 
   // === Envelope Generation (Section II.3) ===
+  // 包絡線間引き（Ramer-Douglas-Peucker 風）: 重要点保持しつつ最大数削減
+  function thinEnvelope(envelope, maxPoints){
+    try{
+      if(!Array.isArray(envelope) || envelope.length <= maxPoints) return envelope.map(pt=>({...pt}));
+      const pts = envelope.map(pt => ({x: pt.gamma, y: pt.Load}));
+      // 重要点候補（必ず保持）: 先頭, 最終, 最大荷重点
+      let idxPmax = 0; let maxAbs = -Infinity;
+      for(let i=0;i<pts.length;i++){ const a = Math.abs(pts[i].y); if(a>maxAbs){ maxAbs=a; idxPmax=i; } }
+      const mandatory = new Set([0, pts.length-1, idxPmax]);
+
+      // RDPアルゴリズム本体
+      function rdpIndices(points, epsilon){
+        const keep = new Set();
+        function recurse(first, last){
+          let maxDist = 0; let index = -1;
+          const x1 = points[first].x, y1 = points[first].y;
+          const x2 = points[last].x, y2 = points[last].y;
+          // 直線距離が0 の場合は全距離0
+          const dx = x2 - x1; const dy = y2 - y1;
+          for(let i=first+1;i<last;i++){
+            const x0 = points[i].x, y0 = points[i].y;
+            let dist;
+            if(dx === 0 && dy === 0){ dist = Math.hypot(x0 - x1, y0 - y1); }
+            else {
+              // 線分からの垂線距離
+              const num = Math.abs(dy*x0 - dx*y0 + x2*y1 - y2*x1);
+              const den = Math.hypot(dx, dy);
+              dist = den === 0 ? 0 : num / den;
+            }
+            if(dist > maxDist){ maxDist = dist; index = i; }
+          }
+          if(maxDist > epsilon && index !== -1){
+            recurse(first, index);
+            recurse(index, last);
+          } else {
+            keep.add(first); keep.add(last);
+          }
+        }
+        recurse(0, points.length-1);
+        return keep;
+      }
+
+      // εを調整しながら最大点数以下にする
+      // 初期εは荷重レンジの 0.5% 程度
+      const loads = pts.map(p=>p.y);
+      const loadRange = Math.max(...loads) - Math.min(...loads) || 1;
+      let epsilon = 0.005 * Math.abs(loadRange);
+      let keep;
+      for(let iter=0; iter<10; iter++){
+        keep = rdpIndices(pts, epsilon);
+        // 重要点を強制追加
+        mandatory.forEach(i=>keep.add(i));
+        if(keep.size <= maxPoints) break;
+        epsilon *= 1.6; // だんだん許容距離を増やす
+      }
+
+      const indices = Array.from(keep).sort((a,b)=>a-b);
+      // 最終的に超過している場合は間引き（均等間隔）
+      if(indices.length > maxPoints){
+        const step = indices.length / (maxPoints - 1);
+        const trimmed = [];
+        for(let i=0;i<maxPoints;i++){ trimmed.push(indices[Math.min(indices.length-1, Math.round(i*step))]); }
+        // 末尾が必ず含まれるよう保証
+        if(trimmed[trimmed.length-1] !== pts.length-1) trimmed[trimmed.length-1] = pts.length-1;
+        indices.length = 0; trimmed.forEach(v=>indices.push(v));
+      }
+
+      const thinned = indices.map(i=> ({...envelope[i]}));
+      return thinned;
+    }catch(err){ console.warn('thinEnvelope エラー', err); return envelope; }
+  }
+
   function generateEnvelope(data, side){
     // Filter data based on selected side（符号で片側のみ抽出）
     let filteredData;
