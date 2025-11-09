@@ -1144,7 +1144,7 @@
           results.lineIII = Py_pre.lineIII;
 
           // Recompute Pu/μ/δv/δu on pre-δu envelope with updated Py
-          const Pu_pre = calculatePu_EnergyEquivalent(envPre, results.Py, pmaxPre, delta_u_max);
+          const Pu_pre = calculatePu_EnergyEquivalent(envPre, results.Py, pmaxPre, delta_u_max, du1);
           Object.assign(results, Pu_pre);
 
           // Recompute Pmax with final δu restriction
@@ -1245,7 +1245,7 @@
   }
 
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
-  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max){
+  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u){
     // Find δy (gamma where Load = Py on envelope)
     const pt_y = findPointAtLoad(envelope, Py);
     const delta_y = Math.abs(pt_y.gamma);
@@ -1254,9 +1254,15 @@
     const K = Py / delta_y;
 
     // Find δu (Section IV.1 Step 9)
-    const delta_u_candidate1 = findDeltaU_08Pmax(envelope, Pmax);
-    const delta_u_candidate2 = delta_u_max; // rad from user input
-    const delta_u = Math.min(delta_u_candidate1, delta_u_candidate2);
+    let delta_u;
+    if(Number.isFinite(fixed_delta_u)){
+      // 既定の（補間済み）δuを固定使用
+      delta_u = Math.min(Math.abs(fixed_delta_u), Math.abs(delta_u_max));
+    }else{
+      const delta_u_candidate1 = findDeltaU_08Pmax(envelope, Pmax);
+      const delta_u_candidate2 = delta_u_max; // rad from user input
+      delta_u = Math.min(delta_u_candidate1, delta_u_candidate2);
+    }
 
     // Calculate area S under envelope up to δu
     const S = calculateAreaUnderEnvelope(envelope, delta_u);
