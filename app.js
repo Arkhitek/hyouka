@@ -449,8 +449,8 @@
       if(!analysisResults || !envelopeData || !envelopeData.length){
         alert('解析結果がありません');
         return;
-      const specimen = (specimen_name && specimen_name.value ? specimen_name.value.trim() : 'testname');
       }
+      const specimen = (specimen_name && specimen_name.value ? specimen_name.value.trim() : 'testname');
       // Ensure jsPDF and html2canvas
       const { jsPDF } = window.jspdf || {};
       if(!jsPDF){
@@ -556,7 +556,8 @@
         doc.addImage(imgData, 'PNG', 0, 10, imgW, imgH);
       }
 
-      doc.save('hyouka_report.pdf');
+      const pdfFileName = `Report_${specimen.replace(/[^a-zA-Z0-9_\-一-龥ぁ-んァ-ヶ]/g,'_')}.pdf`;
+      doc.save(pdfFileName);
       appendLog('PDFレポートを生成しました');
     }catch(err){
       console.error('PDF生成エラー:', err);
@@ -2115,6 +2116,7 @@
       if(!wsSummary) wsSummary = wb.addWorksheet('Summary');
       const r = analysisResults;
       wsSummary.addRow(['項目','値','単位']);
+      wsSummary.addRow(['試験体名称', specimen, '']);
       const Lval2 = parseFloat(wall_length_m.value);
       const rows = [
         ['最大耐力 Pmax', r.Pmax, 'kN'],
