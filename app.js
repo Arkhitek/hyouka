@@ -1513,6 +1513,23 @@
       line: {color: 'gray', width: 1, dash: 'dot'}
     };
 
+    // δu 縦補助線（終局変位角）
+    let trace_du_line = null;
+    if(Number.isFinite(delta_u)){
+      const x_du = delta_u * envelopeSign;
+      // y軸範囲に合わせて上下へ伸ばす
+      const yMin = yRangeSafe[0];
+      const yMax = yRangeSafe[1];
+      trace_du_line = {
+        x: [x_du, x_du],
+        y: [yMin, yMax],
+        mode: 'lines',
+        name: 'δu 補助線',
+        line: {color: 'purple', width: 1.5, dash: 'dot'},
+        hoverinfo: 'skip'
+      };
+    }
+
     const layout = {
       title: '荷重-変形関係と評価直線',
       xaxis: {
@@ -1615,7 +1632,19 @@
     ]
   };
 
-  Plotly.newPlot(plotDiv, [trace_rawdata, trace_env, trace_env_points, trace_lineI, trace_lineIII, trace_py, trace_lineV, trace_lineVI, trace_pmax, trace_p0_lines], layout, plotConfig)
+  Plotly.newPlot(plotDiv, [
+      trace_rawdata,
+      trace_env,
+      trace_env_points,
+      trace_lineI,
+      trace_lineIII,
+      trace_py,
+      trace_lineV,
+      trace_lineVI,
+      trace_pmax,
+      trace_p0_lines,
+      ...(trace_du_line ? [trace_du_line] : [])
+    ], layout, plotConfig)
     .then(function(){
       // 包絡線点の編集機能を実装
       setupEnvelopeEditing(editableEnvelope);
