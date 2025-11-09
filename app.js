@@ -1131,6 +1131,9 @@
   function calculateJTCCMMetrics(envelope, gamma_specific, delta_u_max, L, alpha, c0){
     const results = {};
 
+    // Store gamma_specific for later use in rendering
+    results.gamma_specific = gamma_specific;
+
     // Determine the sign of the envelope (positive or negative side)
     const envelopeSign = envelope[0] && envelope[0].Load < 0 ? -1 : 1;
 
@@ -1748,6 +1751,21 @@
         line: {color: 'purple', width: 1.5, dash: 'dot'}
       });
     }
+    
+    // γs 縦補助線（特定変形時の変形角）: layout.shapes で描画
+    if(results.gamma_specific && Number.isFinite(results.gamma_specific)){
+      const x_gs = results.gamma_specific * envelopeSign;
+      shapes.push({
+        type: 'line',
+        xref: 'x',
+        yref: 'paper',
+        x0: x_gs,
+        x1: x_gs,
+        y0: 0,
+        y1: 1,
+        line: {color: 'orange', width: 1.5, dash: 'dash'}
+      });
+    }
 
     const layout = {
       title: '荷重-変形関係と評価直線',
@@ -1842,63 +1860,61 @@
           bgcolor: 'rgba(255,255,255,0.7)',
           bordercolor: 'red', borderwidth: 1
         },
-        // P0基準ライン (a:Py)
+        // 特定変形角 γs (rad) → グラフ上部に表示
         {
-          x: gamma_max * 0.05 * envelopeSign,
-          y: (p0_a) * envelopeSign,
+          x: (results.gamma_specific) * envelopeSign,
+          y: yRangeSafe[1] * envelopeSign * 0.95,
           xref: 'x', yref: 'y',
-          text: `P0(a)=Py=${p0_a.toFixed(2)} kN`,
-          showarrow: false,
-          xanchor: 'left',
-          yanchor: 'middle',
-          font: {size: 10, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.8)',
-          bordercolor: 'gray', borderwidth: 0.5
-        },
-        // P0基準ライン (b:靭性基準)
-        {
-          x: gamma_max * 0.05 * envelopeSign,
-          y: (p0_b) * envelopeSign,
-          xref: 'x', yref: 'y',
-          text: `P0(b)=C0·Pu·√(2μ-1)=${p0_b.toFixed(2)} kN`,
-          showarrow: false,
-          xanchor: 'left',
-          yanchor: 'middle',
-          font: {size: 10, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.8)',
-          bordercolor: 'gray', borderwidth: 0.5
-        },
-        // P0基準ライン (c:最大耐力基準)
-        {
-          x: gamma_max * 0.05 * envelopeSign,
-          y: (p0_c) * envelopeSign,
-          xref: 'x', yref: 'y',
-          text: `P0(c)=2/3·Pmax=${p0_c.toFixed(2)} kN`,
-          showarrow: false,
-          xanchor: 'left',
-          yanchor: 'middle',
-          font: {size: 10, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.8)',
-          bordercolor: 'gray', borderwidth: 0.5
-        },
-        // P0基準ライン (d:特定変形時)
-        {
-          x: gamma_max * 0.05 * envelopeSign,
-          y: (p0_d) * envelopeSign,
-          xref: 'x', yref: 'y',
-          text: `P0(d)=P(γs)=${p0_d.toFixed(2)} kN`,
-          showarrow: false,
-          xanchor: 'left',
-          yanchor: 'middle',
-          font: {size: 10, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.8)',
-          bordercolor: 'gray', borderwidth: 0.5
+          text: `γs=${formatReciprocal(results.gamma_specific)}`,
+          showarrow: true,
+          ax: 0, ay: -30,
+          font: {size: 12, color: 'orange'},
+          bgcolor: 'rgba(255,255,255,0.7)',
+          bordercolor: 'orange', borderwidth: 1
         }
         ];
+
+        // P0基準注釈を重ならないよう縦方向にスタック配置
+        const p0Values = [
+          {label: 'P0(a)=Py', value: p0_a},
+          {label: 'P0(b)=C0·Pu·√(2μ-1)', value: p0_b},
+          {label: 'P0(c)=2/3·Pmax', value: p0_c},
+          {label: 'P0(d)=P(γs)', value: p0_d}
+        ];
+        // y座標順でソート
+        p0Values.sort((a,b) => b.value - a.value);
+        
+        // 重なり検出と縦オフセット適用
+        const yRangePx = 600; // グラフ高さ（px）
+        const yDataRange = Math.abs(yRangeSafe[1] - yRangeSafe[0]);
+        const minGapPx = 18; // 最小間隔（px）
+        const minGapData = (minGapPx / yRangePx) * yDataRange;
+        
+        let prevY = Infinity;
+        for(let i=0; i<p0Values.length; i++){
+          let yPos = p0Values[i].value;
+          if(prevY - yPos < minGapData){
+            yPos = prevY - minGapData; // 前の注釈から一定間隔空ける
+          }
+          prevY = yPos;
+          allAnnotations.push({
+            x: gamma_max * 0.05 * envelopeSign,
+            y: yPos * envelopeSign,
+            xref: 'x', yref: 'y',
+            text: `${p0Values[i].label}=${p0Values[i].value.toFixed(2)} kN`,
+            showarrow: false,
+            xanchor: 'left',
+            yanchor: 'middle',
+            font: {size: 10, color: 'gray'},
+            bgcolor: 'rgba(255,255,255,0.85)',
+            bordercolor: 'gray', borderwidth: 0.5
+          });
+        }
+
         // 注釈フィルタリング
         if(annMode === 'none') return [];
         if(annMode === 'p0only') return allAnnotations.slice(-4); // P0(a)～(d)のみ
-        if(annMode === 'main') return allAnnotations.slice(0, -4); // 主要のみ（P0除外）
+        if(annMode === 'main') return allAnnotations.slice(0, -4); // 主要のみ(P0除外)
         return allAnnotations; // 'all' or default
       })()
     };
