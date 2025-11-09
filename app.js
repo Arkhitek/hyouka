@@ -1060,15 +1060,22 @@
       // Calculate characteristic points using full envelope (精度優先)
       analysisResults = calculateJTCCMMetrics(fullEnvelope, gamma_specific, delta_u_max, L, alpha, c0);
 
-      // After metrics, thin for display preserving δy, δu, γs
+      // After metrics, thin for display preserving δy, δu, γs, loop peaks
       let displayEnvelope = fullEnvelope;
       if(fullEnvelope.length > 50){
         const mandatoryGammas = [];
         if(Number.isFinite(analysisResults.delta_y)) mandatoryGammas.push(analysisResults.delta_y);
         if(Number.isFinite(analysisResults.delta_u)) mandatoryGammas.push(analysisResults.delta_u);
         if(Number.isFinite(analysisResults.gamma_specific)) mandatoryGammas.push(analysisResults.gamma_specific);
+        // 原データからループ（反転点）を検出し、各ループ最大荷重点のγを保持
+        try{
+          const loopGammas = detectLoopPeakGammas(rawData, side);
+          if(Array.isArray(loopGammas) && loopGammas.length){
+            loopGammas.forEach(g => { if(Number.isFinite(g)) mandatoryGammas.push(g); });
+          }
+        }catch(err){ console.warn('ループピーク検出エラー', err); }
         displayEnvelope = thinEnvelope(fullEnvelope, 40, 50, mandatoryGammas);
-        console.info('[thinEnvelope] 包絡線点を '+displayEnvelope.length+' 点に間引き（δy/δu/γs含む）');
+        console.info('[thinEnvelope] 包絡線点を '+displayEnvelope.length+' 点に間引き（δy/δu/γs/ループ最大荷重を保持）');
       }
 
       // Set envelopeData to display/thinned version for editing
@@ -1112,6 +1119,20 @@
           }
           if(bestIdx >= 0) mandatory.add(bestIdx);
         });
+      }
+      // 各ループ（繰返し）の最大荷重点（局所ピーク）を必須保持点に追加
+      // 単純な局所最大検出: y[i] >= y[i-1] かつ y[i] >= y[i+1] （絶対値ベース）
+      for(let i=1;i<pts.length-1;i++){
+        const y0 = Math.abs(pts[i-1].y);
+        const y1 = Math.abs(pts[i].y);
+        const y2 = Math.abs(pts[i+1].y);
+        if(y1 >= y0 && y1 >= y2){
+          mandatory.add(i);
+        }
+      }
+      // もし必須点だけで maxPoints を超える場合は必須点を全て採用（削減不可）
+      if(mandatory.size > maxPoints){
+        return Array.from(mandatory).sort((a,b)=>a-b).map(i=>({...envelope[i]}));
       }
 
       // RDPアルゴリズム本体
@@ -1176,6 +1197,9 @@
         Array.from(mandatory).forEach(i=>{ if(sortedIdx.includes(i)) out.add(i); });
         const remaining = sortedIdx.filter(i => !out.has(i));
         const need = Math.max(minPoints, Math.min(maxPoints, target)) - out.size;
+        if(need <= 0){
+          return Array.from(out).sort((a,b)=>a-b);
+        }
         if(need > 0){
           const step = remaining.length / (need + 1);
           for(let j=1; j<=need; j++){
@@ -1189,9 +1213,13 @@
           const must = Array.from(mandatory).filter(i=>arr.includes(i)).sort((a,b)=>a-b);
           const others = arr.filter(i=>!mandatory.has(i));
           const keepCount = Math.max(minPoints, Math.min(maxPoints, arr.length));
-          const step2 = others.length / Math.max(1, (keepCount - must.length));
+          const remainNeeded = keepCount - must.length;
+          if(remainNeeded <= 0){
+            return must; // 必須だけで目標超過
+          }
+          const step2 = others.length / Math.max(1, remainNeeded);
           const chosenOthers = [];
-          for(let j=0; j<keepCount - must.length; j++){
+          for(let j=0; j<remainNeeded; j++){
             const pick = others[Math.min(others.length-1, Math.round(j*step2))];
             if(pick !== undefined) chosenOthers.push(pick);
           }
@@ -1297,6 +1325,59 @@
       return simpler.length ? simpler : filteredData;
     }
     return env;
+  }
+
+  // 原データからループ（反転点）を検出し、各ループの最大荷重点のγを返す
+  function detectLoopPeakGammas(data, side){
+    try{
+      if(!Array.isArray(data) || data.length < 2) return [];
+      // generateEnvelope と同じ片側フィルタ
+      let filtered = [];
+      if(side === 'positive'){
+        filtered = data.filter(pt => Number.isFinite(pt.gamma) && Number.isFinite(pt.Load) && pt.gamma >= 0 && pt.Load >= 0);
+      } else {
+        filtered = data.filter(pt => Number.isFinite(pt.gamma) && Number.isFinite(pt.Load) && pt.gamma <= 0 && pt.Load <= 0);
+      }
+      if(filtered.length < 2) return [];
+      // 絶対値γで並びは元データ順のまま使用
+      const absG = (g)=>Math.abs(g);
+      let maxAbsGamma = 0; for(const pt of filtered){ const g = absG(pt.gamma); if(g>maxAbsGamma) maxAbsGamma=g; }
+      const gTol = Math.max(1e-9, 0.005 * maxAbsGamma); // 0.5% を反転境界の目安に
+
+      const loopPeaks = [];
+      let segStart = 0;
+      let lastG = absG(filtered[0].gamma);
+      // セグメント内の最大荷重（絶対）、そのγ
+      let segMaxAbsLoad = Math.abs(filtered[0].Load);
+      let segMaxGamma = absG(filtered[0].gamma);
+
+      for(let i=1; i<filtered.length; i++){
+        const g = absG(filtered[i].gamma);
+        const L = Math.abs(filtered[i].Load);
+        // セグメント内のピーク更新
+        if(L > segMaxAbsLoad){ segMaxAbsLoad = L; segMaxGamma = absG(filtered[i].gamma); }
+        // 反転検出: γ が十分に小さく戻る（前回から gTol 以上の減少）
+        if(g + gTol < lastG){
+          // セグメント確定
+          if(i - 1 >= segStart){ loopPeaks.push(segMaxGamma); }
+          // 新セグメント初期化
+          segStart = i;
+          segMaxAbsLoad = L;
+          segMaxGamma = g;
+        }
+        lastG = g;
+      }
+      // 最終セグメント
+      if(filtered.length - 1 >= segStart){ loopPeaks.push(segMaxGamma); }
+
+      // 近接重複を整理（近すぎるγは一つに）
+      loopPeaks.sort((a,b)=>a-b);
+      const dedup = [];
+      for(const g of loopPeaks){
+        if(dedup.length === 0 || Math.abs(g - dedup[dedup.length-1]) > gTol){ dedup.push(g); }
+      }
+      return dedup;
+    }catch(err){ console.warn('detectLoopPeakGammas エラー', err); return []; }
   }
 
   // === JTCCM Metrics Calculation (Sections III, IV, V) ===
@@ -1979,6 +2060,7 @@
           bgcolor: 'rgba(255,255,255,0.7)',
           bordercolor: 'purple', borderwidth: 1
         },
+        
         // 降伏変位 δy (rad) → 包絡線とLineIV交点に表示
         {
           x: (results.delta_y) * envelopeSign,
