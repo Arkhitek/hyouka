@@ -587,7 +587,8 @@
         ...plotDiv.layout,
         width: 760,
         height: 400,
-        margin: {l:60, r:20, t:40, b:60}
+        margin: {l:60, r:20, t:40, b:60},
+        showlegend: false
       }, {displayModeBar: false});
 
       // Convert to image using html2canvas
