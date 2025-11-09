@@ -88,8 +88,8 @@
           toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
           toggleDragModeButton.style.background = '#4CAF50'; // 緑
         }
-        // Plotlyの範囲選択モードを有効化
-        setPlotDragMode('select');
+        // PlotlyのBox選択モードを有効化
+        setPlotDragMode('box');
       } else {
         toggleBoxSelectModeButton.textContent = '範囲選択ON';
         toggleBoxSelectModeButton.style.background = '#2196F3'; // 青
