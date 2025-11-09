@@ -1599,8 +1599,12 @@
     // Line I, II, III (Py determination)
     const gamma_range = [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma)))]
     ;
-    const trace_lineI = makeLine(lineI, gamma_range, 'Line I (0.1-0.4Pmax)', 'orange', envelopeSign);
-    const trace_lineIII = makeLine(lineIII, gamma_range, 'Line III (接線)', 'red', envelopeSign);
+  const trace_lineI = makeLine(lineI, gamma_range, 'Line I (0.1-0.4Pmax)', 'orange', envelopeSign);
+  const trace_lineII = makeLine(lineII, gamma_range, 'Line II (0.4-0.9Pmax)', 'darkorange', envelopeSign);
+  const trace_lineIII = makeLine(lineIII, gamma_range, 'Line III (接線)', 'red', envelopeSign);
+  // Line IV: 原点を通り、第II/III直線と同じ勾配の直線（作図補助）
+  const lineIV = { slope: lineII.slope, intercept: 0 };
+  const trace_lineIV = makeLine(lineIV, gamma_range, 'Line IV (原点・IIと同勾配)', 'brown', envelopeSign);
 
     // Py point
     const trace_py = {
@@ -1776,7 +1780,9 @@
       trace_env,
       trace_env_points,
       trace_lineI,
+  trace_lineII,
       trace_lineIII,
+  trace_lineIV,
       trace_py,
       trace_lineV,
       trace_lineVI,
