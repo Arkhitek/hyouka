@@ -89,7 +89,8 @@
           toggleDragModeButton.style.background = '#4CAF50'; // 緑
         }
         // PlotlyのBox選択モードを有効化
-        setPlotDragMode('box');
+          setPlotDragMode('select'); // 'select'モードにすると、Plotlyが自動的にBox/Lassoを提供
+          appendLog('範囲選択モードON: Box/Lasso選択が有効になりました');
       } else {
         toggleBoxSelectModeButton.textContent = '範囲選択ON';
         toggleBoxSelectModeButton.style.background = '#2196F3'; // 青
@@ -97,6 +98,7 @@
         setPlotDragMode('pan');
         // 選択をクリア
         selectedPointIndices.clear();
+          appendLog('範囲選択モードOFF: パンモードに戻りました');
       }
     };
   }
@@ -110,7 +112,7 @@
           'dragmode': mode
         };
         // Box選択の場合は、選択方向も設定
-        if(mode === 'box'){
+          if(mode === 'box' || mode === 'select'){
           updateLayout['selectdirection'] = 'any';
         }
         Plotly.relayout(plot, updateLayout);
