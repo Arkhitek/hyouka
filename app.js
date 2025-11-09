@@ -583,13 +583,15 @@
 
       // Render Plotly graph to temporary container
       const pdfPlotDiv = container.querySelector('#pdf-plot');
-      await Plotly.newPlot(pdfPlotDiv, plotDiv.data, {
+      const pdfLayout = {
         ...plotDiv.layout,
         width: 760,
         height: 400,
         margin: {l:60, r:20, t:40, b:60},
-        showlegend: false
-      }, {displayModeBar: false});
+        showlegend: false,
+        annotations: [] // PDFでは注釈を非表示
+      };
+      await Plotly.newPlot(pdfPlotDiv, plotDiv.data, pdfLayout, {displayModeBar: false});
 
       // Convert to image using html2canvas
       const canvas = await html2canvas(container, {
