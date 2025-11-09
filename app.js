@@ -430,11 +430,14 @@
         }
       }
       if(!filledBoth){
-        // 単一列として、押下対象のみ置換
+        // 単一列: 対象指定 or both
         if(target === 'gamma'){
           gammaInput.value = lines.join('\n');
-        }else{
+        } else if(target === 'load') {
           loadInput.value = lines.join('\n');
+        } else if(target === 'both') {
+          gammaInput.value = lines.join('\n');
+          loadInput.value  = lines.join('\n');
         }
       }
       // 解析試行（どちらか空なら内部で早期return）
@@ -446,6 +449,8 @@
   }
   if(pasteGammaButton){ pasteGammaButton.addEventListener('click', () => pasteFromClipboard('gamma')); }
   if(pasteLoadButton){ pasteLoadButton.addEventListener('click', () => pasteFromClipboard('load')); }
+  const pasteBothButton = document.getElementById('pasteBothButton');
+  if(pasteBothButton){ pasteBothButton.addEventListener('click', () => pasteFromClipboard('both')); }
   // 手動ボタン削除済み: processButton クリックイベント不要
 
   // パラメータ変更時の自動解析
