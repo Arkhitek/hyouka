@@ -588,17 +588,18 @@
       const simplifiedAnnotations = plotDiv.layout.annotations ? plotDiv.layout.annotations.map(ann => {
         // Extract label from text (remove values and units)
         let simplifiedText = '';
-        if(ann.text.includes('δu=')) simplifiedText = 'δu';
+        // IMPORTANT: Detect P0 first so embedded 'Py=' or 'Pmax=' doesn't override
+        if(ann.text.includes('P0(a)')) simplifiedText = 'P0(a)';
+        else if(ann.text.includes('P0(b)')) simplifiedText = 'P0(b)';
+        else if(ann.text.includes('P0(c)')) simplifiedText = 'P0(c)';
+        else if(ann.text.includes('P0(d)')) simplifiedText = 'P0(d)';
+        else if(ann.text.includes('δu=')) simplifiedText = 'δu';
         else if(ann.text.includes('δy=')) simplifiedText = 'δy';
         else if(ann.text.includes('Py=')) simplifiedText = 'Py';
         else if(ann.text.includes('Pu=')) simplifiedText = 'Pu';
         else if(ann.text.includes('δv=')) simplifiedText = 'δv';
         else if(ann.text.includes('Pmax=')) simplifiedText = 'Pmax';
         else if(ann.text.includes('γs=')) simplifiedText = 'γs';
-        else if(ann.text.includes('P0(a)')) simplifiedText = 'P0(a)';
-        else if(ann.text.includes('P0(b)')) simplifiedText = 'P0(b)';
-        else if(ann.text.includes('P0(c)')) simplifiedText = 'P0(c)';
-        else if(ann.text.includes('P0(d)')) simplifiedText = 'P0(d)';
         else return ann;
         
         return {
