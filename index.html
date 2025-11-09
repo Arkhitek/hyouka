@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>接合部性能評価プログラム</title>
+  <title>耐力壁性能評価プログラム</title>
   <link rel="icon" type="image/png" href="houraku.png" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.plot.ly/plotly-2.31.0.min.js"></script>
@@ -39,8 +39,8 @@
         <div id="brandLogo" aria-label="Arkhitek ロゴ"></div>
       </div>
     </header>
-  <h1>接合部性能評価プログラム</h1>
-  <p class="subtitle">接合部及びその倍率の試験・評価業務方法書に準拠</p>
+  <h1>耐力壁性能評価プログラム</h1>
+  <p class="subtitle">耐力壁及びその倍率の試験・評価業務方法書に準拠</p>
 
   <div id="guide" class="card guide">
     <h2>📖 操作ガイド</h2>
@@ -50,7 +50,7 @@
   <p>
     変形角 γ(rad) と 荷重 P(kN) を <strong>1行1データ</strong>で入力・貼り付けすると、
     <strong>自動で解析</strong>が実行されます。<br/>
-  「対象接合部」を選択すると <strong>特定変形・最大終局変位・C0</strong> が即時に反映されます。<br/>
+  「対象耐力壁」を選択すると <strong>特定変形・最大終局変位・C0</strong> が即時に反映されます。<br/>
     「評価対象包絡線（正/負）」も必要に応じて選択してください。
   </p>
   <ul>
@@ -91,7 +91,7 @@
     <h2>1. 試験データの入力</h2>
     <div class="row">
       <div class="control-group">
-  <label for="wall_preset">対象接合部</label>
+  <label for="wall_preset">対象耐力壁</label>
         <select id="wall_preset">
           <option value="">選択してください</option>
           <option value="wood_loaded">木造(載荷式/無載荷式)</option>
