@@ -2589,6 +2589,13 @@
     const dsEl = document.getElementById('val_ds');
     if(dsEl) dsEl.textContent = Ds;
 
+    // (d) 特定変形時耐力のラベルに設定値を反映（例: γ=1/200rad）
+    const labelSpec = document.getElementById('label_specific_deformation');
+    if(labelSpec && specific_deformation && specific_deformation.value){
+      const n = Number(specific_deformation.value);
+      labelSpec.textContent = Number.isFinite(n) ? n.toLocaleString('ja-JP') : '---';
+    }
+
     document.getElementById('val_p0_a').textContent = r.p0_a.toFixed(3);
     document.getElementById('val_p0_b').textContent = r.p0_b.toFixed(3);
     document.getElementById('val_p0_c').textContent = r.p0_c.toFixed(3);
