@@ -1726,7 +1726,12 @@
       const ctrlOrMeta = e.ctrlKey || e.metaKey;
       if(!(ctrlOrMeta && e.shiftKey)) return;
       
-      // Plotlyのイベントから最寄りの点を取得
+      // 選択中の点が存在しない場合はドラッグ不可
+      if(window._selectedEnvelopePoint < 0 || !editableEnvelope || window._selectedEnvelopePoint >= editableEnvelope.length){
+        return;
+      }
+      
+      // Plotlyのイベントから選択点の座標を取得
       const xaxis = plotDiv._fullLayout.xaxis;
       const yaxis = plotDiv._fullLayout.yaxis;
       if(!xaxis || !yaxis) return;
@@ -1735,41 +1740,30 @@
       const clickX = e.clientX - bbox.left;
       const clickY = e.clientY - bbox.top;
       
-  // クリック位置をデータ座標に変換（pixel → linear）
-  const dataX = xaxis.p2l(clickX);
-  const dataY = yaxis.p2l(clickY);
+      // 選択点のピクセル座標を計算
+      const selectedIdx = window._selectedEnvelopePoint;
+      const selectedPt = editableEnvelope[selectedIdx];
+      const px = xaxis.l2p(selectedPt.gamma);
+      const py = yaxis.l2p(selectedPt.Load);
+      const dist = Math.sqrt((clickX - px)**2 + (clickY - py)**2);
       
-      // 包絡線点との距離を計算して最寄り点を検索
-      let minDist = Infinity;
-      let nearestIdx = -1;
-      editableEnvelope.forEach((pt, idx) => {
-  const px = xaxis.l2p(pt.gamma);
-  const py = yaxis.l2p(pt.Load);
-        const dist = Math.sqrt((clickX - px)**2 + (clickY - py)**2);
-        if(dist < minDist){
-          minDist = dist;
-          nearestIdx = idx;
-        }
-      });
-      
-  // 35px以内なら包絡線点と判定（ヒット領域を少し広げる）
-  if(minDist < 35 && nearestIdx >= 0){
+      // 35px以内なら選択点と判定（ヒット領域）
+      if(dist < 35){
         // Plotlyのデフォルトドラッグを無効化（先に実行）
         e.stopImmediatePropagation();
         e.preventDefault();
         
         shiftDragging = true;
-        shiftDragIndex = nearestIdx;
+        shiftDragIndex = selectedIdx;
         shiftDragStartX = clickX;
         shiftDragStartY = clickY;
         plotDiv.style.cursor = 'move';
         
-  // Plotlyデフォルトのズーム/パンはイベント抑止で無効化（dragmodeの変更は行わない）
+        // Plotlyデフォルトのズーム/パンはイベント抑止で無効化（dragmodeの変更は行わない）
         
         // ツールチップ表示
         if(pointTooltip){
-          const pt = editableEnvelope[nearestIdx];
-          pointTooltip.textContent = `γ: ${pt.gamma.toFixed(6)}, P: ${pt.Load.toFixed(3)}`;
+          pointTooltip.textContent = `γ: ${selectedPt.gamma.toFixed(6)}, P: ${selectedPt.Load.toFixed(3)}`;
           pointTooltip.style.left = e.clientX + 10 + 'px';
           pointTooltip.style.top = e.clientY + 10 + 'px';
           pointTooltip.style.display = 'block';
