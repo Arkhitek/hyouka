@@ -1161,117 +1161,103 @@
         return core.concat(chosen).sort((a,b)=>a-b).map(i=>({...envelope[i]}));
       }
 
-      // RDPアルゴリズム本体
-      function rdpIndices(points, epsilon){
-        const keep = new Set();
-        function recurse(first, last){
-          let maxDist = 0; let index = -1;
-          const x1 = points[first].x, y1 = points[first].y;
-          const x2 = points[last].x, y2 = points[last].y;
-          // 直線距離が0 の場合は全距離0
-          const dx = x2 - x1; const dy = y2 - y1;
-          for(let i=first+1;i<last;i++){
-            const x0 = points[i].x, y0 = points[i].y;
-            let dist;
-            if(dx === 0 && dy === 0){ dist = Math.hypot(x0 - x1, y0 - y1); }
-            else {
-              // 線分からの垂線距離
-              const num = Math.abs(dy*x0 - dx*y0 + x2*y1 - y2*x1);
-              const den = Math.hypot(dx, dy);
-              dist = den === 0 ? 0 : num / den;
+      // 弧長(累積距離)を計算
+      const arcLengths = [0];
+      for(let i=1; i<pts.length; i++){
+        const dx = pts[i].x - pts[i-1].x;
+        const dy = pts[i].y - pts[i-1].y;
+        arcLengths.push(arcLengths[i-1] + Math.hypot(dx, dy));
+      }
+      const totalLength = arcLengths[arcLengths.length-1];
+
+      // 均等分割ベースの間引き（必須点を保持しつつ、弧長に沿って均等にサンプリング）
+      const targetPoints = Math.min(maxPoints, Math.max(minPoints, Math.floor((minPoints + maxPoints) / 2)));
+      const selected = new Set(mandatory); // 必須点は最初に選択
+      
+      // 必須点をインデックス順にソート
+      const mandatoryArray = Array.from(mandatory).sort((a,b) => a-b);
+      
+      // 必須点の間の区間を均等に補完
+      for(let m=0; m<mandatoryArray.length-1; m++){
+        const startIdx = mandatoryArray[m];
+        const endIdx = mandatoryArray[m+1];
+        const segmentStartArc = arcLengths[startIdx];
+        const segmentEndArc = arcLengths[endIdx];
+        const segmentLength = segmentEndArc - segmentStartArc;
+        
+        if(segmentLength <= 0) continue;
+        
+        // この区間に割り当てる追加点数（区間長に比例、最低0点）
+        const additionalPointsNeeded = Math.max(0, targetPoints - selected.size);
+        if(additionalPointsNeeded <= 0) break;
+        
+        const segmentRatio = segmentLength / totalLength;
+        const pointsForSegment = Math.max(0, Math.round(additionalPointsNeeded * segmentRatio));
+        
+        if(pointsForSegment > 0){
+          // 区間内を弧長で均等分割
+          const arcStep = segmentLength / (pointsForSegment + 1);
+          for(let j=1; j<=pointsForSegment; j++){
+            const targetArc = segmentStartArc + j * arcStep;
+            // targetArcに最も近いインデックスを探す
+            let bestIdx = startIdx;
+            let bestDiff = Infinity;
+            for(let k=startIdx+1; k<endIdx; k++){
+              const diff = Math.abs(arcLengths[k] - targetArc);
+              if(diff < bestDiff){
+                bestDiff = diff;
+                bestIdx = k;
+              }
             }
-            if(dist > maxDist){ maxDist = dist; index = i; }
-          }
-          if(maxDist > epsilon && index !== -1){
-            recurse(first, index);
-            recurse(index, last);
-          } else {
-            keep.add(first); keep.add(last);
+            if(bestIdx > startIdx && bestIdx < endIdx){
+              selected.add(bestIdx);
+            }
           }
         }
-        recurse(0, points.length-1);
-        return keep;
       }
-
-      // εを調整しながら目標範囲 [minPoints, maxPoints] に収める
-      // 初期εは荷重レンジの 0.5% 程度
-      const loads = pts.map(p=>p.y);
-      const loadRange = Math.max(...loads) - Math.min(...loads) || 1;
-      let epsilon = 0.005 * Math.abs(loadRange);
-      let keep, prevKeep = null;
-      for(let iter=0; iter<12; iter++){
-        const k = rdpIndices(pts, epsilon);
-        mandatory.forEach(i=>k.add(i)); // 重要点は必ず保持
-        const size = k.size;
-        if(size < minPoints && prevKeep){
-          // 直前は大きく、今回小さすぎ → 直前集合から均等サンプルで [min,max] 内へ
-          keep = prevKeep;
-          break;
+      
+      // まだ目標点数に達していない場合、全体から均等にサンプリング
+      if(selected.size < minPoints){
+        const remaining = [];
+        for(let i=0; i<pts.length; i++){
+          if(!selected.has(i)) remaining.push(i);
         }
-        keep = k;
-        if(size <= maxPoints){
-          // 目標上限以下になった時点で停止
-          break;
-        }
-        prevKeep = k;
-        epsilon *= 1.6; // 許容距離を増やし、点数を減らす
-      }
-
-      function sampleWithMandatory(sortedIdx, target){
-        const out = new Set();
-        // まず必須を入れる
-        Array.from(mandatory).forEach(i=>{ if(sortedIdx.includes(i)) out.add(i); });
-        const remaining = sortedIdx.filter(i => !out.has(i));
-        const need = Math.max(minPoints, Math.min(maxPoints, target)) - out.size;
-        if(need <= 0){
-          return Array.from(out).sort((a,b)=>a-b);
-        }
-        if(need > 0){
+        const need = minPoints - selected.size;
+        if(need > 0 && remaining.length > 0){
           const step = remaining.length / (need + 1);
           for(let j=1; j<=need; j++){
-            const idx = remaining[Math.min(remaining.length-1, Math.round(j*step)-1)];
-            if(idx !== undefined) out.add(idx);
+            const idx = remaining[Math.min(remaining.length-1, Math.round(j*step))];
+            if(idx !== undefined) selected.add(idx);
           }
         }
-        const arr = Array.from(out).sort((a,b)=>a-b);
-        // 容量超過時は必須以外から間引き
-        if(arr.length > maxPoints){
-          const must = Array.from(mandatory).filter(i=>arr.includes(i)).sort((a,b)=>a-b);
-          const others = arr.filter(i=>!mandatory.has(i));
-          const keepCount = Math.max(minPoints, Math.min(maxPoints, arr.length));
-          const remainNeeded = keepCount - must.length;
-          if(remainNeeded <= 0){
-            return must; // 必須だけで目標超過
+      }
+      
+      // 目標点数を超えた場合、必須点以外から削減（弧長間隔が最小のものから）
+      if(selected.size > maxPoints){
+        const selectedArray = Array.from(selected).sort((a,b)=>a-b);
+        const canRemove = [];
+        
+        // 削除候補（必須でない点）の弧長間隔を計算
+        for(let i=1; i<selectedArray.length; i++){
+          const idx = selectedArray[i];
+          if(!mandatory.has(idx)){
+            const prevIdx = selectedArray[i-1];
+            const interval = arcLengths[idx] - arcLengths[prevIdx];
+            canRemove.push({idx, interval});
           }
-          const step2 = others.length / Math.max(1, remainNeeded);
-          const chosenOthers = [];
-          for(let j=0; j<remainNeeded; j++){
-            const pick = others[Math.min(others.length-1, Math.round(j*step2))];
-            if(pick !== undefined) chosenOthers.push(pick);
-          }
-          return must.concat(chosenOthers).sort((a,b)=>a-b);
         }
-        return arr;
+        
+        // 間隔が小さい順にソート
+        canRemove.sort((a,b) => a.interval - b.interval);
+        
+        // 削除
+        const toRemove = selected.size - maxPoints;
+        for(let i=0; i<toRemove && i<canRemove.length; i++){
+          selected.delete(canRemove[i].idx);
+        }
       }
 
-      let indices = Array.from(keep).sort((a,b)=>a-b);
-      if(indices.length > maxPoints){
-        indices = sampleWithMandatory(indices, maxPoints);
-      } else if(indices.length < minPoints){
-        // 小さすぎる場合は元データから補完して下限以上に
-        const allIdx = Array.from({length: pts.length}, (_,i)=>i);
-        const remain = allIdx.filter(i=>!indices.includes(i));
-        const need = minPoints - indices.length;
-        const step = remain.length / (need + 1);
-        for(let j=1; j<=need; j++){
-          const pick = remain[Math.min(remain.length-1, Math.round(j*step)-1)];
-          if(pick !== undefined) indices.push(pick);
-        }
-        // 必須を確実に含める
-        mandatory.forEach(i=>{ if(!indices.includes(i)) indices.push(i); });
-        indices = indices.sort((a,b)=>a-b).slice(0, Math.max(minPoints, Math.min(maxPoints, indices.length)));
-      }
-
+      const indices = Array.from(selected).sort((a,b)=>a-b);
       return indices.map(i=> ({...envelope[i]}));
     }catch(err){ console.warn('thinEnvelope エラー', err); return envelope; }
   }
