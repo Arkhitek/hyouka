@@ -1396,27 +1396,78 @@
   }
 
   function calculateAreaUnderEnvelope(envelope, delta_limit){
-    let area = 0;
-    let prev = null;
-    for(const pt of envelope){
-      const absGamma = Math.abs(pt.gamma);
-      if(absGamma > delta_limit){
-        if(prev && Math.abs(prev.gamma) < delta_limit){
-          // Interpolate to delta_limit
-          const ratio = (delta_limit - Math.abs(prev.gamma)) / (absGamma - Math.abs(prev.gamma));
-          const load_at_limit = Math.abs(prev.Load) + (Math.abs(pt.Load) - Math.abs(prev.Load)) * ratio;
-          area += (delta_limit - Math.abs(prev.gamma)) * (Math.abs(prev.Load) + load_at_limit) / 2;
+    try{
+      if(!envelope || envelope.length === 0 || !Number.isFinite(delta_limit) || delta_limit <= 0){
+        return 0;
+      }
+      // 0点(0,0)を含む区分台形積分に変更し、先頭三角形の欠落を防止
+      const pts = [];
+      pts.push({ g: 0, p: 0 });
+      for(const pt of envelope){
+        const g = Math.abs(pt.gamma);
+        const p = Math.abs(pt.Load);
+        // 同一点が続く場合はスキップ
+        if(pts.length && Math.abs(pts[pts.length-1].g - g) < 1e-15 && Math.abs(pts[pts.length-1].p - p) < 1e-15){
+          continue;
         }
-        break;
+        // g が減少するデータはスキップ（生成済み包絡線は単調増加のはずだが念のため）
+        if(g < pts[pts.length-1].g - 1e-15){
+          continue;
+        }
+        pts.push({ g, p });
       }
-      if(prev){
-        const dg = absGamma - Math.abs(prev.gamma);
-        const avg_load = (Math.abs(prev.Load) + Math.abs(pt.Load)) / 2;
-        area += dg * avg_load;
+
+      let area = 0;
+      for(let i=0; i<pts.length-1; i++){
+        const g1 = pts[i].g;
+        const p1 = pts[i].p;
+        const g2 = pts[i+1].g;
+        const p2 = pts[i+1].p;
+
+        if(g1 >= delta_limit){
+          break;
+        }
+
+        const upper = Math.min(g2, delta_limit);
+        const width = upper - g1;
+        if(width <= 0){
+          continue;
+        }
+        let pUpper = p2;
+        if(upper < g2 - 1e-15){
+          // 線形補間で終端荷重を算出
+          const t = (upper - g1) / (g2 - g1);
+          pUpper = p1 + (p2 - p1) * t;
+        }
+        // 台形公式
+        area += width * (p1 + pUpper) / 2;
+        if(upper >= delta_limit - 1e-15){
+          break;
+        }
       }
-      prev = pt;
+      return area;
+    }catch(_){
+      // 失敗時は従来ロジックにフォールバック（保険）
+      let area = 0; let prev = null;
+      for(const pt of envelope){
+        const absGamma = Math.abs(pt.gamma);
+        if(absGamma > delta_limit){
+          if(prev && Math.abs(prev.gamma) < delta_limit){
+            const ratio = (delta_limit - Math.abs(prev.gamma)) / (absGamma - Math.abs(prev.gamma));
+            const load_at_limit = Math.abs(prev.Load) + (Math.abs(pt.Load) - Math.abs(prev.Load)) * ratio;
+            area += (delta_limit - Math.abs(prev.gamma)) * (Math.abs(prev.Load) + load_at_limit) / 2;
+          }
+          break;
+        }
+        if(prev){
+          const dg = absGamma - Math.abs(prev.gamma);
+          const avg_load = (Math.abs(prev.Load) + Math.abs(pt.Load)) / 2;
+          area += dg * avg_load;
+        }
+        prev = pt;
+      }
+      return area;
     }
-    return area;
   }
 
   // === P0 Calculation (Section V.1) ===
