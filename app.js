@@ -534,7 +534,6 @@
       container.innerHTML = `
         <div style="text-align:center; margin-bottom:15px;">
           <h1 style="font-size:24px; margin:10px 0;">耐力壁性能評価レポート</h1>
-          <p style="font-size:12px; color:#666; margin:5px 0;">生成日時: ${new Date().toISOString().replace('T',' ').substring(0,19)}</p>
           <p style="font-size:12px; color:#333; margin:5px 0;">試験体名称: ${specimen.replace(/</g,'&lt;')}</p>
         </div>
         <div id="pdf-plot" style="width:100%; height:400px; margin-bottom:20px;"></div>
