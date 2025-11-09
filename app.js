@@ -1782,6 +1782,13 @@
       hovermode: 'closest',
       dragmode: 'pan', // デフォルトはパン操作
       showlegend: true,
+      legend: {
+        orientation: 'h',
+        x: 0.5,
+        xanchor: 'center',
+        y: -0.15,
+        yanchor: 'top'
+      },
       height: 600,
       uirevision: 'fixed',
       shapes: shapes,
