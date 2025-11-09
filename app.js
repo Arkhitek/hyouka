@@ -1544,6 +1544,8 @@
   const plotConfig = {
     editable: false,
     displayModeBar: true,
+    // Box select / Lasso select を有効化
+    displaylogo: false,
     // デフォルトのAutoscale/Resetを削除（全データへのフィットを防止）
     modeBarButtonsToRemove: ['autoScale2d', 'resetScale2d'],
     // 包絡線範囲へのフィット専用ボタンを追加
@@ -1612,6 +1614,7 @@
     let isDragging = false;
     let dragPointIndex = -1;
     let selectedPointIndex = -1; // Del キー用の選択状態
+    let selectedPoints = []; // Box/Lasso select用の複数選択状態
     // window._selectedEnvelopePoint の初期化をコメントアウト（既存の選択状態を保持）
     if(typeof window._selectedEnvelopePoint === 'undefined'){
       window._selectedEnvelopePoint = -1; // 初回のみ初期化
@@ -1657,6 +1660,25 @@
     };
     plotDiv.on('plotly_click', _plotClickHandler);
     
+    // Box Select / Lasso Select で複数点選択を検出
+    plotDiv.on('plotly_selected', function(eventData){
+      if(!eventData || !eventData.points) {
+        selectedPoints = [];
+        return;
+      }
+      // 包絡線点トレース（curveNumber === 2）のみを抽出
+      selectedPoints = eventData.points
+        .filter(pt => pt.curveNumber === 2)
+        .map(pt => pt.pointIndex);
+      console.debug('[plotly_selected] 選択された包絡線点:', selectedPoints);
+    });
+    
+    // 選択解除
+    plotDiv.on('plotly_deselect', function(){
+      selectedPoints = [];
+      console.debug('[plotly_deselect] 選択解除');
+    });
+    
     // ダブルクリックによる点追加やデフォルト操作は許容（別処理はしない）
     
     // ダブルクリックによる新規点追加機能は廃止（仕様変更）
@@ -1667,8 +1689,32 @@
       document.removeEventListener('keydown', _keydownHandler);
     }
     const handleKeydown = function(e){
-      // 編集モード撤廃
+      // Delキーで選択中の点を削除（単一点 or 複数点）
       if(e.key === 'Delete' || e.key === 'Del'){
+        // Box/Lasso selectで複数選択がある場合
+        if(selectedPoints.length > 0){
+          // 最小2点は残すためのチェック
+          const remainingCount = editableEnvelope.length - selectedPoints.length;
+          if(remainingCount < 2){
+            alert('包絡線には最低2点が必要です。削除できません。');
+            return;
+          }
+          // 降順ソートして後ろから削除（インデックスずれ防止）
+          const sortedIndices = [...selectedPoints].sort((a,b) => b - a);
+          sortedIndices.forEach(idx => {
+            if(idx >= 0 && idx < editableEnvelope.length){
+              editableEnvelope.splice(idx, 1);
+            }
+          });
+          pushHistory(editableEnvelope);
+          appendLog(`包絡線点 ${selectedPoints.length}個 を一括削除しました`);
+          selectedPoints = [];
+          selectedPointIndex = -1;
+          window._selectedEnvelopePoint = -1;
+          recalculateFromEnvelope(editableEnvelope);
+          return;
+        }
+        // 単一点選択の場合（既存の動作）
         if(selectedPointIndex >= 0 && selectedPointIndex < editableEnvelope.length){
           deleteEnvelopePoint(selectedPointIndex, editableEnvelope);
           selectedPointIndex = -1;
