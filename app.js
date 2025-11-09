@@ -1885,10 +1885,26 @@
   // データ座標に変換（pixel → linear）
   const newGamma = xaxis.p2l(moveX);
   const newLoad = yaxis.p2l(moveY);
-      
-      // 包絡線点を更新
-      editableEnvelope[shiftDragIndex].gamma = newGamma;
-      editableEnvelope[shiftDragIndex].Load = newLoad;
+
+      // ---- スナップ(吸着)処理: 実験データ折れ線に近い場合はその最近傍点へ吸着 ----
+      // ピクセル距離閾値（適宜調整可能）
+      const SNAP_PX_THRESHOLD = 12;
+      let appliedGamma = newGamma;
+      let appliedLoad = newLoad;
+      let snapped = false;
+      if(window.rawData !== undefined){ /* グローバル rawData 参照 */ }
+      try{
+        const snapCandidate = findNearestRawDataSnap(newGamma, newLoad, xaxis, yaxis, rawData, SNAP_PX_THRESHOLD);
+        if(snapCandidate){
+          appliedGamma = snapCandidate.gamma;
+          appliedLoad = snapCandidate.Load;
+          snapped = true;
+        }
+      }catch(err){ /* 失敗しても通常ドラッグ継続 */ }
+
+      // 包絡線点を更新（スナップ後座標）
+      editableEnvelope[shiftDragIndex].gamma = appliedGamma;
+      editableEnvelope[shiftDragIndex].Load = appliedLoad;
       
       // プロット更新
       updateEnvelopePlot(editableEnvelope);
@@ -1896,15 +1912,20 @@
       // 点編集ダイアログが対象点を編集中なら、入力欄をリアルタイム更新（ユーザーのリクエスト対応）
       if(pointEditDialog && pointEditDialog.style.display !== 'none' && window._selectedEnvelopePoint === shiftDragIndex){
         // 表示精度は既存UIに合わせる（γ: 4～6桁, P: 3桁）必要に応じて後で統一可能
-        if(editGammaInput){ editGammaInput.value = newGamma.toFixed(4); }
-        if(editLoadInput){ editLoadInput.value = newLoad.toFixed(1); }
+        if(editGammaInput){ editGammaInput.value = appliedGamma.toFixed(4); }
+        if(editLoadInput){ editLoadInput.value = appliedLoad.toFixed(1); }
       }
 
       // ツールチップ更新
       if(pointTooltip){
-        pointTooltip.textContent = `γ: ${newGamma.toFixed(6)}, P: ${newLoad.toFixed(3)}`;
+        pointTooltip.textContent = `γ: ${appliedGamma.toFixed(6)}, P: ${appliedLoad.toFixed(3)}${snapped ? ' [吸着]' : ''}`;
         pointTooltip.style.left = e.clientX + 10 + 'px';
         pointTooltip.style.top = e.clientY + 10 + 'px';
+        if(snapped){
+          pointTooltip.style.background = 'rgba(255,165,0,0.85)'; // 吸着時はオレンジ強調
+        }else{
+          pointTooltip.style.background = 'rgba(0,0,0,0.6)';
+        }
       }
       
       e.preventDefault();
@@ -2093,6 +2114,47 @@
     const closestY = y1 + t * dy;
     
     return Math.sqrt((px - closestX) * (px - closestX) + (py - closestY) * (py - closestY));
+  }
+
+  // 実験データ折れ線に対する最近傍点を探索し、ピクセル距離がthresholdPx以下ならデータ座標を返す
+  function findNearestRawDataSnap(gamma, load, xaxis, yaxis, raw, thresholdPx){
+    try{
+      if(!raw || raw.length < 2 || !xaxis || !yaxis) return null;
+      const px = xaxis.l2p(gamma);
+      const py = yaxis.l2p(load);
+      let best = null;
+      let bestDist = Number.isFinite(thresholdPx) ? thresholdPx : 10;
+      for(let i=0; i<raw.length-1; i++){
+        const r1 = raw[i];
+        const r2 = raw[i+1];
+        if(!r1 || !r2) continue;
+        const g1 = r1.gamma, l1 = r1.Load;
+        const g2 = r2.gamma, l2 = r2.Load;
+        if(!Number.isFinite(g1) || !Number.isFinite(l1) || !Number.isFinite(g2) || !Number.isFinite(l2)) continue;
+        const x1 = xaxis.l2p(g1); const y1 = yaxis.l2p(l1);
+        const x2 = xaxis.l2p(g2); const y2 = yaxis.l2p(l2);
+        const dx = x2 - x1; const dy = y2 - y1;
+        const lenSq = dx*dx + dy*dy;
+        let cx = x1, cy = y1; // 最近傍のピクセル座標
+        if(lenSq > 0){
+          let t = ((px - x1)*dx + (py - y1)*dy) / lenSq;
+          t = Math.max(0, Math.min(1, t));
+          cx = x1 + t*dx;
+          cy = y1 + t*dy;
+        }
+        const dist = Math.hypot(px - cx, py - cy);
+        if(dist <= bestDist){
+          bestDist = dist;
+          best = {
+            gamma: xaxis.p2l(cx),
+            Load:  yaxis.p2l(cy),
+            distPx: dist,
+            segmentIndex: i
+          };
+        }
+      }
+      return best;
+    }catch(err){ return null; }
   }
   
   function recalculateFromEnvelope(editableEnvelope){
