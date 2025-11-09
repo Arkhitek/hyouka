@@ -2658,7 +2658,8 @@
         ['P0(a) 降伏耐力', r.p0_a, 'kN'],
         ['P0(b) 靭性基準', r.p0_b, 'kN'],
         ['P0(c) 最大耐力基準', r.p0_c, 'kN'],
-        ['P0(d) 特定変形時', r.p0_d, 'kN'],
+  // (d) 特定変形時耐力: 設定した reciprocal 変形角を明示 (例: γ=1/200rad)
+  [ `P0(d) 特定変形時 γ=1/${Number(specific_deformation.value)}rad P`, r.p0_d, 'kN' ],
         ['短期基準せん断耐力 P0', r.P0, 'kN'],
         ['短期許容せん断耐力 Pa', r.Pa, 'kN'],
         ['短期許容せん断耐力 Pa (kN/m)', (isFinite(Lval2)&&Lval2>0)? r.Pa/Lval2 : '-', 'kN/m'],
