@@ -1145,7 +1145,7 @@
 
           // Recompute Pu/μ/δv/δu with updated Py
           // 注意: 面積Sを正しくδuまで補間するため、積分対象は元の full envelope を渡す
-          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1, envPre);
+          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1);
           Object.assign(results, Pu_pre);
 
           // Recompute Pmax with final δu restriction
@@ -1299,23 +1299,44 @@
   }
 
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
-  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u, envelopeYield){
-    // Find δy (gamma where Load = Py on envelope)
-    // 降伏点は Pmax までの区間で補間（途中下降は無視）
-    const envForYield = (envelopeYield && envelopeYield.length>=2) ? envelopeYield : envelope;
-    const asc = (function(){
-      if(!envForYield || envForYield.length<2) return envForYield;
-      let idxMax=0, maxAbs=-Infinity; 
-      for(let i=0;i<envForYield.length;i++){ 
-        const a=Math.abs(envForYield[i].Load); 
-        if(a>maxAbs){ maxAbs=a; idxMax=i; } 
+  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u){
+    // δy は包絡線とLineIV(Py水平線)の交点の変形角
+    // 包絡線上で |Load| が Py に最も近い点、または線形補間でPyを横切る点のγ
+    let delta_y = 0;
+    try{
+      // 包絡線を原点から走査し、Pyを跨ぐ区間を線形補間
+      let found = false;
+      for(let i=0; i<envelope.length-1; i++){
+        const p1 = envelope[i];
+        const p2 = envelope[i+1];
+        const L1 = Math.abs(p1.Load);
+        const L2 = Math.abs(p2.Load);
+        // Pyを跨ぐ区間を検出
+        if((L1 <= Py && L2 >= Py) || (L1 >= Py && L2 <= Py)){
+          const denom = (L2 - L1);
+          const ratio = denom !== 0 ? (Py - L1) / denom : 0;
+          const clamped = Math.max(0, Math.min(1, ratio));
+          const g1 = Math.abs(p1.gamma);
+          const g2 = Math.abs(p2.gamma);
+          delta_y = g1 + (g2 - g1) * clamped;
+          found = true;
+          break;
+        }
       }
-      const slice = envForYield.slice(0, idxMax+1);
-      return slice.length>=2? slice : envForYield;
-    })();
-    let pt_y = findPointAtLoadStrict(asc, Py);
-    if(!pt_y){ pt_y = findPointAtLoad(envForYield, Py); }
-    const delta_y = Math.abs(pt_y.gamma);
+      if(!found){
+        // 見つからない場合は最も近い点を採用（フォールバック）
+        let minDiff = Infinity; let bestGamma = 0;
+        for(const pt of envelope){
+          const diff = Math.abs(Math.abs(pt.Load) - Py);
+          if(diff < minDiff){ minDiff = diff; bestGamma = Math.abs(pt.gamma); }
+        }
+        delta_y = bestGamma;
+      }
+    }catch(_){
+      // 極端なエラー時は従来ロジック
+      const pt_y = findPointAtLoad(envelope, Py);
+      delta_y = Math.abs(pt_y.gamma);
+    }
 
     // Initial stiffness K
     const K = Py / delta_y;
@@ -1715,12 +1736,24 @@
           bgcolor: 'rgba(255,255,255,0.7)',
           bordercolor: 'purple', borderwidth: 1
         },
-        // 降伏耐力 Py (kN) と 降伏変位 δy (rad) → Py点に表示
+        // 降伏変位 δy (rad) → 包絡線とLineIV交点に表示
+        {
+          x: (results.delta_y) * envelopeSign,
+          y: (Py) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `δy=${formatReciprocal(results.delta_y)}`,
+          showarrow: true,
+          ax: 20, ay: 20,
+          font: {size: 12, color: 'green'},
+          bgcolor: 'rgba(255,255,255,0.7)',
+          bordercolor: 'green', borderwidth: 1
+        },
+        // 降伏耐力 Py (kN) → Line I/IIIの交点(Py_gamma)に表示
         {
           x: (Py_gamma) * envelopeSign,
           y: (Py) * envelopeSign,
           xref: 'x', yref: 'y',
-          text: `Py=${Py.toFixed(1)} kN\nδy=${formatReciprocal(Py_gamma)}`,
+          text: `Py=${Py.toFixed(1)} kN`,
           showarrow: true,
           ax: 20, ay: -40,
           font: {size: 12, color: 'green'},
