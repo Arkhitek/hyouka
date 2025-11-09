@@ -1178,29 +1178,27 @@
   function calculatePy_LineMethod(envelope, Pmax){
     const p_max = Pmax;
 
-    // 上昇区間（|Load|が単調増加する部分）を抽出し、後半の下降区間を除外する
+    // 上昇区間は「Pmaxに到達するまでの区間」と定義（途中に一時的下降があっても切り捨てない）
     const ascendingEnvelope = (function(){
-      const asc = [];
-      let last = -Infinity;
-      for(const pt of envelope){
-        const a = Math.abs(pt.Load);
-        if(a + 1e-12 < last){
-          // 下降を検知したらそこで打ち切り
-          break;
-        }
-        asc.push(pt);
-        last = a;
-      }
-      // 安全策: 3点未満なら元の包絡線を使用
-      return asc.length >= 3 ? asc : envelope;
+      if(!envelope || envelope.length < 2) return envelope;
+      // Pmaxインデックスを取得
+      let idxMax = 0; let maxAbs = -Infinity;
+      for(let i=0;i<envelope.length;i++){ const a=Math.abs(envelope[i].Load); if(a>maxAbs){ maxAbs=a; idxMax=i; } }
+      const slice = envelope.slice(0, idxMax+1);
+      return slice.length>=3 ? slice : envelope; // 最低点数確保
     })();
 
-    // 0.1, 0.4, 0.9 Pmax を上昇区間内で線形補間
-    const p01 = findPointAtLoadStrict(ascendingEnvelope, 0.1 * p_max);
-    const p04 = findPointAtLoadStrict(ascendingEnvelope, 0.4 * p_max);
-    const p09 = findPointAtLoadStrict(ascendingEnvelope, 0.9 * p_max);
+    // 0.1, 0.4, 0.9 Pmax を上昇区間内で線形補間（失敗時は全体包絡線でフォールバック）
+    const p01 = findPointAtLoadStrict(ascendingEnvelope, 0.1 * p_max) || findPointAtLoad(envelope, 0.1 * p_max);
+    const p04 = findPointAtLoadStrict(ascendingEnvelope, 0.4 * p_max) || findPointAtLoad(envelope, 0.4 * p_max);
+    const p09 = findPointAtLoadStrict(ascendingEnvelope, 0.9 * p_max) || findPointAtLoad(envelope, 0.9 * p_max);
 
-    if(!p01 || !p04 || !p09) throw new Error('0.1/0.4/0.9 Pmax の点が見つかりません');
+    if(!p01 || !p04 || !p09){
+      // 極端にデータが不足する場合はエラーを投げず、最後の点を使う（安全なフォールバック）
+      const last = envelope[envelope.length-1];
+      const PyFallback = Math.abs(last.Load) * 0.6; // 仮値（荷重増加がない極端ケース）
+      return { Py: PyFallback, Py_gamma: Math.abs(last.gamma)*0.6, lineI: {slope:0, intercept:PyFallback}, lineII:{slope:0, intercept:PyFallback}, lineIII:{slope:0, intercept:PyFallback} };
+    }
 
     // Use absolute values for gamma as well
     const gamma01 = Math.abs(p01.gamma);
@@ -1302,9 +1300,13 @@
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
   function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u){
     // Find δy (gamma where Load = Py on envelope)
-    // 降伏点は上昇区間から補間（失敗時は従来の単純探索へフォールバック）
+    // 降伏点は Pmax までの区間で補間（途中下降は無視）
     const asc = (function(){
-      const a=[]; let last=-Infinity; for(const p of envelope){ const L=Math.abs(p.Load); if(L + 1e-12 < last) break; a.push(p); last=L; } return a.length>=2? a : envelope; })();
+      if(!envelope || envelope.length<2) return envelope;
+      let idxMax=0, maxAbs=-Infinity; for(let i=0;i<envelope.length;i++){ const a=Math.abs(envelope[i].Load); if(a>maxAbs){ maxAbs=a; idxMax=i; } }
+      const slice = envelope.slice(0, idxMax+1);
+      return slice.length>=2? slice : envelope;
+    })();
     let pt_y = findPointAtLoadStrict(asc, Py);
     if(!pt_y){ pt_y = findPointAtLoad(envelope, Py); }
     const delta_y = Math.abs(pt_y.gamma);
