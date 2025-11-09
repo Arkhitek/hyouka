@@ -103,12 +103,23 @@
 
   // Plotlyのドラッグモードを設定する関数
   function setPlotDragMode(mode){
-    if(window.plotDiv && window.Plotly){
+    const plot = document.getElementById('plot');
+    if(plot && window.Plotly && plot._fullLayout){
       try{
-        Plotly.relayout(plotDiv, {'dragmode': mode});
+        const updateLayout = {
+          'dragmode': mode
+        };
+        // Box選択の場合は、選択方向も設定
+        if(mode === 'box'){
+          updateLayout['selectdirection'] = 'any';
+        }
+        Plotly.relayout(plot, updateLayout);
+        console.log('Plotly dragmode set to:', mode);
       }catch(err){
         console.warn('setPlotDragMode error:', err);
       }
+    } else {
+      console.warn('plotDiv not ready for setPlotDragMode');
     }
   }
 
