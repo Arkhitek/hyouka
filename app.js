@@ -29,6 +29,7 @@
   const wall_preset = document.getElementById('wall_preset');
   const envelope_side = document.getElementById('envelope_side');
   const specimen_name = document.getElementById('specimen_name');
+  const show_annotations = document.getElementById('show_annotations');
   // 手動解析ボタンは廃止
   const processButton = null;
   const downloadExcelButton = document.getElementById('downloadExcelButton');
@@ -462,6 +463,13 @@
   });
   if(envelope_side){
     envelope_side.addEventListener('change', () => { if(rawData && rawData.length>=3) scheduleAutoRun(); });
+  }
+  if(show_annotations){
+    show_annotations.addEventListener('change', () => {
+      if(envelopeData && analysisResults && Object.keys(analysisResults).length){
+        renderPlot(envelopeData, analysisResults);
+      }
+    });
   }
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
   if(generatePdfButton) generatePdfButton.addEventListener('click', generatePdfReport);
@@ -1759,7 +1767,9 @@
       height: 600,
       uirevision: 'fixed',
       shapes: shapes,
-      annotations: [
+      annotations: (function(){
+        const annMode = show_annotations ? show_annotations.value : 'all';
+        const allAnnotations = [
         // 終局変位 δu (rad) → Line VI の終点（delta_u の位置）に表示
         {
           x: (lineVI.gamma_end) * envelopeSign,
@@ -1834,53 +1844,63 @@
         },
         // P0基準ライン (a:Py)
         {
-          x: 0,
+          x: gamma_max * 0.05 * envelopeSign,
           y: (p0_a) * envelopeSign,
           xref: 'x', yref: 'y',
           text: `P0(a)=Py=${p0_a.toFixed(2)} kN`,
           showarrow: false,
-          ax: 0, ay: 0,
-          font: {size: 11, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.6)',
-          bordercolor: 'gray', borderwidth: 0
+          xanchor: 'left',
+          yanchor: 'middle',
+          font: {size: 10, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.8)',
+          bordercolor: 'gray', borderwidth: 0.5
         },
         // P0基準ライン (b:靭性基準)
         {
-          x: 0,
+          x: gamma_max * 0.05 * envelopeSign,
           y: (p0_b) * envelopeSign,
           xref: 'x', yref: 'y',
           text: `P0(b)=C0·Pu·√(2μ-1)=${p0_b.toFixed(2)} kN`,
           showarrow: false,
-          ax: 0, ay: 0,
-          font: {size: 11, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.6)',
-          bordercolor: 'gray', borderwidth: 0
+          xanchor: 'left',
+          yanchor: 'middle',
+          font: {size: 10, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.8)',
+          bordercolor: 'gray', borderwidth: 0.5
         },
         // P0基準ライン (c:最大耐力基準)
         {
-          x: 0,
+          x: gamma_max * 0.05 * envelopeSign,
           y: (p0_c) * envelopeSign,
           xref: 'x', yref: 'y',
           text: `P0(c)=2/3·Pmax=${p0_c.toFixed(2)} kN`,
           showarrow: false,
-          ax: 0, ay: 0,
-          font: {size: 11, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.6)',
-          bordercolor: 'gray', borderwidth: 0
+          xanchor: 'left',
+          yanchor: 'middle',
+          font: {size: 10, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.8)',
+          bordercolor: 'gray', borderwidth: 0.5
         },
         // P0基準ライン (d:特定変形時)
         {
-          x: 0,
+          x: gamma_max * 0.05 * envelopeSign,
           y: (p0_d) * envelopeSign,
           xref: 'x', yref: 'y',
           text: `P0(d)=P(γs)=${p0_d.toFixed(2)} kN`,
           showarrow: false,
-          ax: 0, ay: 0,
-          font: {size: 11, color: 'gray'},
-          bgcolor: 'rgba(255,255,255,0.6)',
-          bordercolor: 'gray', borderwidth: 0
+          xanchor: 'left',
+          yanchor: 'middle',
+          font: {size: 10, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.8)',
+          bordercolor: 'gray', borderwidth: 0.5
         }
-      ]
+        ];
+        // 注釈フィルタリング
+        if(annMode === 'none') return [];
+        if(annMode === 'p0only') return allAnnotations.slice(-4); // P0(a)～(d)のみ
+        if(annMode === 'main') return allAnnotations.slice(0, -4); // 主要のみ（P0除外）
+        return allAnnotations; // 'all' or default
+      })()
     };
 
   const plotConfig = {
