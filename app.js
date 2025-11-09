@@ -1145,7 +1145,7 @@
 
           // Recompute Pu/μ/δv/δu with updated Py
           // 注意: 面積Sを正しくδuまで補間するため、積分対象は元の full envelope を渡す
-          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1);
+          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1, envPre);
           Object.assign(results, Pu_pre);
 
           // Recompute Pmax with final δu restriction
@@ -1299,17 +1299,22 @@
   }
 
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
-  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u){
+  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u, envelopeYield){
     // Find δy (gamma where Load = Py on envelope)
     // 降伏点は Pmax までの区間で補間（途中下降は無視）
+    const envForYield = (envelopeYield && envelopeYield.length>=2) ? envelopeYield : envelope;
     const asc = (function(){
-      if(!envelope || envelope.length<2) return envelope;
-      let idxMax=0, maxAbs=-Infinity; for(let i=0;i<envelope.length;i++){ const a=Math.abs(envelope[i].Load); if(a>maxAbs){ maxAbs=a; idxMax=i; } }
-      const slice = envelope.slice(0, idxMax+1);
-      return slice.length>=2? slice : envelope;
+      if(!envForYield || envForYield.length<2) return envForYield;
+      let idxMax=0, maxAbs=-Infinity; 
+      for(let i=0;i<envForYield.length;i++){ 
+        const a=Math.abs(envForYield[i].Load); 
+        if(a>maxAbs){ maxAbs=a; idxMax=i; } 
+      }
+      const slice = envForYield.slice(0, idxMax+1);
+      return slice.length>=2? slice : envForYield;
     })();
     let pt_y = findPointAtLoadStrict(asc, Py);
-    if(!pt_y){ pt_y = findPointAtLoad(envelope, Py); }
+    if(!pt_y){ pt_y = findPointAtLoad(envForYield, Py); }
     const delta_y = Math.abs(pt_y.gamma);
 
     // Initial stiffness K
