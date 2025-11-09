@@ -1531,21 +1531,20 @@
       line: {color: 'gray', width: 1, dash: 'dot'}
     };
 
-    // δu 縦補助線（終局変位角）
-    let trace_du_line = null;
+    // δu 縦補助線（終局変位角）: layout.shapes で描画（常に全高に伸ばす）
+    const shapes = [];
     if(Number.isFinite(delta_u)){
       const x_du = delta_u * envelopeSign;
-      // y軸範囲に合わせて上下へ伸ばす
-      const yMin = yRangeSafe[0];
-      const yMax = yRangeSafe[1];
-      trace_du_line = {
-        x: [x_du, x_du],
-        y: [yMin, yMax],
-        mode: 'lines',
-        name: 'δu 補助線',
-        line: {color: 'purple', width: 1.5, dash: 'dot'},
-        hoverinfo: 'skip'
-      };
+      shapes.push({
+        type: 'line',
+        xref: 'x',
+        yref: 'paper',
+        x0: x_du,
+        x1: x_du,
+        y0: 0,
+        y1: 1,
+        line: {color: 'purple', width: 1.5, dash: 'dot'}
+      });
     }
 
     const layout = {
@@ -1565,6 +1564,7 @@
       showlegend: true,
       height: 600,
       uirevision: 'fixed',
+      shapes: shapes,
       annotations: [
         // 終局変位 δu (rad) → Line VI の終点（delta_u の位置）に表示
         {
@@ -1660,8 +1660,7 @@
       trace_lineV,
       trace_lineVI,
       trace_pmax,
-      trace_p0_lines,
-      ...(trace_du_line ? [trace_du_line] : [])
+      trace_p0_lines
     ], layout, plotConfig)
     .then(function(){
       // 包絡線点の編集機能を実装
