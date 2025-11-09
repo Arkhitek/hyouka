@@ -110,21 +110,22 @@
     
     <button id="clearDataButton">入力データ削除</button>
     
+    <div class="paste-buttons" style="margin-top:10px;">
+      <button id="pasteGammaButton" type="button">変形角 γ 貼り付け</button>
+      <button id="pasteBothButton" type="button">変形・荷重 同時貼り付け</button>
+      <button id="pasteLoadButton" type="button">荷重 P 貼り付け</button>
+    </div>
+    <small style="display:block; margin-top:4px; color:#666;">Excel等から γ, P 2列コピー → 「変形・荷重 同時貼り付け」ボタン</small>
+
     <div class="row">
       <div class="control-group">
         <label for="gammaInput">変形角 γ (rad) - 1行1データ</label>
-        <button id="pasteGammaButton" type="button" style="margin-left:8px;">変形角 γ 貼り付け</button>
-  <textarea id="gammaInput" rows="8" placeholder="例: 数値以外の行は無視されます"></textarea>
+        <textarea id="gammaInput" rows="8" placeholder="例: 数値以外の行は無視されます"></textarea>
         <small>変形角データを1行に1つずつ入力</small>
-      </div>
-      <div class="control-group" style="align-self:flex-end;">
-        <button id="pasteBothButton" type="button">変形・荷重 同時貼り付け</button>
-        <small style="display:block; margin-top:4px; color:#666;">Excel等から γ, P 2列コピー → 「変形・荷重 同時貼り付け」ボタン</small>
       </div>
       <div class="control-group">
         <label for="loadInput">荷重 P (kN) - 1行1データ</label>
-        <button id="pasteLoadButton" type="button" style="margin-left:8px;">荷重 P 貼り付け</button>
-  <textarea id="loadInput" rows="8" placeholder="例: γと同じ行数で入力"></textarea>
+        <textarea id="loadInput" rows="8" placeholder="例: γと同じ行数で入力"></textarea>
         <small>荷重データを1行に1つずつ入力（変形角と同じ行数）</small>
       </div>
     </div>
