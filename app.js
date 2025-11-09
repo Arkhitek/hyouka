@@ -1130,9 +1130,25 @@
           mandatory.add(i);
         }
       }
-      // もし必須点だけで maxPoints を超える場合は必須点を全て採用（削減不可）
+      // もし必須点だけで maxPoints を超える場合は必須点から優先順位で削減
       if(mandatory.size > maxPoints){
-        return Array.from(mandatory).sort((a,b)=>a-b).map(i=>({...envelope[i]}));
+        // 優先順位: 0(先頭), last(末尾), Pmax, δy/δu/γs近傍, その他ループピーク
+        const mustArr = Array.from(mandatory);
+        const priorityCore = [0, pts.length-1, idxPmax];
+        const core = mustArr.filter(i=>priorityCore.includes(i));
+        const others = mustArr.filter(i=>!priorityCore.includes(i));
+        // コア + 均等サンプリングで maxPoints に収める
+        const need = maxPoints - core.length;
+        if(need <= 0){
+          return core.sort((a,b)=>a-b).map(i=>({...envelope[i]}));
+        }
+        const step = others.length / (need + 1);
+        const chosen = [];
+        for(let j=1; j<=need; j++){
+          const pick = others[Math.min(others.length-1, Math.round(j*step)-1)];
+          if(pick !== undefined) chosen.push(pick);
+        }
+        return core.concat(chosen).sort((a,b)=>a-b).map(i=>({...envelope[i]}));
       }
 
       // RDPアルゴリズム本体
