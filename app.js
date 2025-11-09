@@ -1051,21 +1051,28 @@
       // Calculate delta_u_max from 1/maxUltimateDeformationValue
       const delta_u_max = 1.0 / maxUltimateDeformationValue;
 
-      // Generate envelope from direct input data
-      envelopeData = generateEnvelope(rawData, side);
-      if(envelopeData.length === 0){
+      // Generate full envelope from direct input data (計算用フル包絡線)
+      const fullEnvelope = generateEnvelope(rawData, side);
+      if(fullEnvelope.length === 0){
         console.warn('包絡線の生成に失敗しました');
         return;
       }
+      // Calculate characteristic points using full envelope (精度優先)
+      analysisResults = calculateJTCCMMetrics(fullEnvelope, gamma_specific, delta_u_max, L, alpha, c0);
 
-      // 包絡線点の間引き（表示・編集用）: 最大50点
-      if(envelopeData.length > 50){
-        envelopeData = thinEnvelope(envelopeData, 50);
-        console.info('[thinEnvelope] 包絡線点を '+envelopeData.length+' 点に間引きました');
+      // After metrics, thin for display preserving δy, δu, γs
+      let displayEnvelope = fullEnvelope;
+      if(fullEnvelope.length > 50){
+        const mandatoryGammas = [];
+        if(Number.isFinite(analysisResults.delta_y)) mandatoryGammas.push(analysisResults.delta_y);
+        if(Number.isFinite(analysisResults.delta_u)) mandatoryGammas.push(analysisResults.delta_u);
+        if(Number.isFinite(analysisResults.gamma_specific)) mandatoryGammas.push(analysisResults.gamma_specific);
+        displayEnvelope = thinEnvelope(fullEnvelope, 40, 50, mandatoryGammas);
+        console.info('[thinEnvelope] 包絡線点を '+displayEnvelope.length+' 点に間引き（δy/δu/γs含む）');
       }
 
-      // Calculate characteristic points
-      analysisResults = calculateJTCCMMetrics(envelopeData, gamma_specific, delta_u_max, L, alpha, c0);
+      // Set envelopeData to display/thinned version for editing
+      envelopeData = displayEnvelope;
 
       // Render results
       renderPlot(envelopeData, analysisResults);
@@ -1085,8 +1092,8 @@
 
 
   // === Envelope Generation (Section II.3) ===
-  // 包絡線間引き（Ramer-Douglas-Peucker 風）: 重要点保持しつつ最大数削減
-  function thinEnvelope(envelope, maxPoints){
+  // 包絡線間引き（Ramer-Douglas-Peucker 風）: 重要点保持しつつ 40～50 点程度へ縮約
+  function thinEnvelope(envelope, minPoints, maxPoints, mandatoryGammas){
     try{
       if(!Array.isArray(envelope) || envelope.length <= maxPoints) return envelope.map(pt=>({...pt}));
       const pts = envelope.map(pt => ({x: pt.gamma, y: pt.Load}));
@@ -1094,6 +1101,18 @@
       let idxPmax = 0; let maxAbs = -Infinity;
       for(let i=0;i<pts.length;i++){ const a = Math.abs(pts[i].y); if(a>maxAbs){ maxAbs=a; idxPmax=i; } }
       const mandatory = new Set([0, pts.length-1, idxPmax]);
+      // 追加必須点: 指定された γ 値（δy, δu, γs）に最も近い点
+      if(Array.isArray(mandatoryGammas)){
+        mandatoryGammas.forEach(gTarget => {
+          if(!Number.isFinite(gTarget)) return;
+          let bestIdx = -1; let bestDiff = Infinity;
+          for(let i=0;i<pts.length;i++){
+            const d = Math.abs(pts[i].x - gTarget);
+            if(d < bestDiff){ bestDiff = d; bestIdx = i; }
+          }
+          if(bestIdx >= 0) mandatory.add(bestIdx);
+        });
+      }
 
       // RDPアルゴリズム本体
       function rdpIndices(points, epsilon){
@@ -1127,33 +1146,79 @@
         return keep;
       }
 
-      // εを調整しながら最大点数以下にする
+      // εを調整しながら目標範囲 [minPoints, maxPoints] に収める
       // 初期εは荷重レンジの 0.5% 程度
       const loads = pts.map(p=>p.y);
       const loadRange = Math.max(...loads) - Math.min(...loads) || 1;
       let epsilon = 0.005 * Math.abs(loadRange);
-      let keep;
-      for(let iter=0; iter<10; iter++){
-        keep = rdpIndices(pts, epsilon);
-        // 重要点を強制追加
-        mandatory.forEach(i=>keep.add(i));
-        if(keep.size <= maxPoints) break;
-        epsilon *= 1.6; // だんだん許容距離を増やす
+      let keep, prevKeep = null;
+      for(let iter=0; iter<12; iter++){
+        const k = rdpIndices(pts, epsilon);
+        mandatory.forEach(i=>k.add(i)); // 重要点は必ず保持
+        const size = k.size;
+        if(size < minPoints && prevKeep){
+          // 直前は大きく、今回小さすぎ → 直前集合から均等サンプルで [min,max] 内へ
+          keep = prevKeep;
+          break;
+        }
+        keep = k;
+        if(size <= maxPoints){
+          // 目標上限以下になった時点で停止
+          break;
+        }
+        prevKeep = k;
+        epsilon *= 1.6; // 許容距離を増やし、点数を減らす
       }
 
-      const indices = Array.from(keep).sort((a,b)=>a-b);
-      // 最終的に超過している場合は間引き（均等間隔）
+      function sampleWithMandatory(sortedIdx, target){
+        const out = new Set();
+        // まず必須を入れる
+        Array.from(mandatory).forEach(i=>{ if(sortedIdx.includes(i)) out.add(i); });
+        const remaining = sortedIdx.filter(i => !out.has(i));
+        const need = Math.max(minPoints, Math.min(maxPoints, target)) - out.size;
+        if(need > 0){
+          const step = remaining.length / (need + 1);
+          for(let j=1; j<=need; j++){
+            const idx = remaining[Math.min(remaining.length-1, Math.round(j*step)-1)];
+            if(idx !== undefined) out.add(idx);
+          }
+        }
+        const arr = Array.from(out).sort((a,b)=>a-b);
+        // 容量超過時は必須以外から間引き
+        if(arr.length > maxPoints){
+          const must = Array.from(mandatory).filter(i=>arr.includes(i)).sort((a,b)=>a-b);
+          const others = arr.filter(i=>!mandatory.has(i));
+          const keepCount = Math.max(minPoints, Math.min(maxPoints, arr.length));
+          const step2 = others.length / Math.max(1, (keepCount - must.length));
+          const chosenOthers = [];
+          for(let j=0; j<keepCount - must.length; j++){
+            const pick = others[Math.min(others.length-1, Math.round(j*step2))];
+            if(pick !== undefined) chosenOthers.push(pick);
+          }
+          return must.concat(chosenOthers).sort((a,b)=>a-b);
+        }
+        return arr;
+      }
+
+      let indices = Array.from(keep).sort((a,b)=>a-b);
       if(indices.length > maxPoints){
-        const step = indices.length / (maxPoints - 1);
-        const trimmed = [];
-        for(let i=0;i<maxPoints;i++){ trimmed.push(indices[Math.min(indices.length-1, Math.round(i*step))]); }
-        // 末尾が必ず含まれるよう保証
-        if(trimmed[trimmed.length-1] !== pts.length-1) trimmed[trimmed.length-1] = pts.length-1;
-        indices.length = 0; trimmed.forEach(v=>indices.push(v));
+        indices = sampleWithMandatory(indices, maxPoints);
+      } else if(indices.length < minPoints){
+        // 小さすぎる場合は元データから補完して下限以上に
+        const allIdx = Array.from({length: pts.length}, (_,i)=>i);
+        const remain = allIdx.filter(i=>!indices.includes(i));
+        const need = minPoints - indices.length;
+        const step = remain.length / (need + 1);
+        for(let j=1; j<=need; j++){
+          const pick = remain[Math.min(remain.length-1, Math.round(j*step)-1)];
+          if(pick !== undefined) indices.push(pick);
+        }
+        // 必須を確実に含める
+        mandatory.forEach(i=>{ if(!indices.includes(i)) indices.push(i); });
+        indices = indices.sort((a,b)=>a-b).slice(0, Math.max(minPoints, Math.min(maxPoints, indices.length)));
       }
 
-      const thinned = indices.map(i=> ({...envelope[i]}));
-      return thinned;
+      return indices.map(i=> ({...envelope[i]}));
     }catch(err){ console.warn('thinEnvelope エラー', err); return envelope; }
   }
 
