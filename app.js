@@ -1143,8 +1143,9 @@
           results.lineII = Py_pre.lineII;
           results.lineIII = Py_pre.lineIII;
 
-          // Recompute Pu/μ/δv/δu on pre-δu envelope with updated Py
-          const Pu_pre = calculatePu_EnergyEquivalent(envPre, results.Py, pmaxPre, delta_u_max, du1);
+          // Recompute Pu/μ/δv/δu with updated Py
+          // 注意: 面積Sを正しくδuまで補間するため、積分対象は元の full envelope を渡す
+          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1);
           Object.assign(results, Pu_pre);
 
           // Recompute Pmax with final δu restriction
