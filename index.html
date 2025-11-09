@@ -211,13 +211,15 @@
       </div>
       <p style="margin:8px 0 0; color:#666; font-size:12px;">
         ヒント: 「マウスドラッグ移動ON」ボタンを押すと、パン・ズームを抑止して点のドラッグ移動ができます。
+        「範囲選択ON」ボタンを押すと、Box/Lasso選択で複数の点を選択して一括削除できます。
         ドラッグ中は下の入力欄の γ・P もリアルタイムに連動更新されます。
       </p>
       <label>変形角 γ (rad): <input type="number" id="edit_gamma" step="0.0001" /></label>
       <label>荷重 P (kN): <input type="number" id="edit_load" step="0.1" /></label>
       <div class="modal-actions" style="display:flex; flex-direction:column; gap:8px;">
-        <div style="display:flex; justify-content:center;">
-          <button id="toggleDragMode" style="flex:1; max-width:300px; background:#4CAF50; color:white;">マウスドラッグ移動ON</button>
+        <div style="display:flex; gap:8px; justify-content:center;">
+          <button id="toggleDragMode" style="flex:1; background:#4CAF50; color:white;">マウスドラッグ移動ON</button>
+          <button id="toggleBoxSelectMode" style="flex:1; background:#2196F3; color:white;">範囲選択ON</button>
         </div>
         <div style="display:flex; gap:8px; justify-content:center;">
           <button id="addPointEdit" class="add" style="flex:1;">点を追加</button>

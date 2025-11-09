@@ -47,9 +47,12 @@
   const applyPointEditButton = document.getElementById('applyPointEdit');
   const cancelPointEditButton = document.getElementById('cancelPointEdit');
   const toggleDragModeButton = document.getElementById('toggleDragMode');
+  const toggleBoxSelectModeButton = document.getElementById('toggleBoxSelectMode');
 
   // ドラッグモードの状態（グローバル変数）
   let isDragModeEnabled = false;
+  let isBoxSelectModeEnabled = false;
+  let selectedPointIndices = new Set(); // 範囲選択された点のインデックス
 
   // トグルボタンのイベントハンドラ
   if(toggleDragModeButton){
@@ -58,11 +61,55 @@
       if(isDragModeEnabled){
         toggleDragModeButton.textContent = 'マウスドラッグ移動OFF';
         toggleDragModeButton.style.background = '#f44336'; // 赤
+        // 範囲選択モードをOFFにする
+        if(isBoxSelectModeEnabled){
+          isBoxSelectModeEnabled = false;
+          toggleBoxSelectModeButton.textContent = '範囲選択ON';
+          toggleBoxSelectModeButton.style.background = '#2196F3'; // 青
+          setPlotDragMode('pan');
+        }
       } else {
         toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
         toggleDragModeButton.style.background = '#4CAF50'; // 緑
       }
     };
+  }
+
+  // 範囲選択トグルボタンのイベントハンドラ
+  if(toggleBoxSelectModeButton){
+    toggleBoxSelectModeButton.onclick = function(){
+      isBoxSelectModeEnabled = !isBoxSelectModeEnabled;
+      if(isBoxSelectModeEnabled){
+        toggleBoxSelectModeButton.textContent = '範囲選択OFF';
+        toggleBoxSelectModeButton.style.background = '#FF9800'; // オレンジ
+        // ドラッグ移動モードをOFFにする
+        if(isDragModeEnabled){
+          isDragModeEnabled = false;
+          toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
+          toggleDragModeButton.style.background = '#4CAF50'; // 緑
+        }
+        // Plotlyの範囲選択モードを有効化
+        setPlotDragMode('select');
+      } else {
+        toggleBoxSelectModeButton.textContent = '範囲選択ON';
+        toggleBoxSelectModeButton.style.background = '#2196F3'; // 青
+        // パンモードに戻す
+        setPlotDragMode('pan');
+        // 選択をクリア
+        selectedPointIndices.clear();
+      }
+    };
+  }
+
+  // Plotlyのドラッグモードを設定する関数
+  function setPlotDragMode(mode){
+    if(window.plotDiv && window.Plotly){
+      try{
+        Plotly.relayout(plotDiv, {'dragmode': mode});
+      }catch(err){
+        console.warn('setPlotDragMode error:', err);
+      }
+    }
   }
 
   // 履歴管理 (Undo/Redo)
@@ -255,7 +302,36 @@
   const deletePointEditButton = document.getElementById('deletePointEdit');
   if(deletePointEditButton){
     deletePointEditButton.onclick = function(){
-      if(window._selectedEnvelopePoint >= 0){
+      // 範囲選択モードで複数点が選択されている場合
+      if(selectedPointIndices.size > 0){
+        const indicesToDelete = Array.from(selectedPointIndices).sort((a,b) => b-a); // 降順でソート
+        const minRequired = 2; // 最低限残す点数
+        
+        // 削除後に残る点数を確認
+        if(envelopeData.length - indicesToDelete.length < minRequired){
+          alert(`削除できません。包絡線は最低 ${minRequired} 点必要です。`);
+          return;
+        }
+        
+        // 履歴に保存
+        pushHistory(envelopeData);
+        
+        // 降順で削除（インデックスがずれないように）
+        for(const idx of indicesToDelete){
+          if(idx >= 0 && idx < envelopeData.length){
+            envelopeData.splice(idx, 1);
+          }
+        }
+        
+        appendLog(`範囲選択で ${indicesToDelete.length} 点を削除しました`);
+        selectedPointIndices.clear();
+        window._selectedEnvelopePoint = -1;
+        renderPlot(envelopeData, analysisResults);
+        recalculateFromEnvelope(envelopeData);
+        closePointEditDialog();
+      }
+      // 単一点の選択の場合
+      else if(window._selectedEnvelopePoint >= 0){
         deleteEnvelopePoint(window._selectedEnvelopePoint, envelopeData);
         window._selectedEnvelopePoint = -1;
         renderPlot(envelopeData, analysisResults);
@@ -2346,6 +2422,10 @@
     plotDiv.on('plotly_selected', function(eventData){
       if(!eventData || !eventData.points) {
         selectedPoints = [];
+        // 範囲選択モードの場合、グローバル変数もクリア
+        if(isBoxSelectModeEnabled){
+          selectedPointIndices.clear();
+        }
         return;
       }
       // 包絡線点トレース（curveNumber === 2）のみを抽出
@@ -2353,11 +2433,23 @@
         .filter(pt => pt.curveNumber === 2)
         .map(pt => pt.pointIndex);
       console.debug('[plotly_selected] 選択された包絡線点:', selectedPoints);
+      
+      // 範囲選択モードが有効な場合、選択された点をグローバル変数に保存
+      if(isBoxSelectModeEnabled){
+        selectedPointIndices.clear();
+        selectedPoints.forEach(idx => selectedPointIndices.add(idx));
+        appendLog(`範囲選択: ${selectedPointIndices.size} 点が選択されました`);
+      }
     });
     
     // 選択解除
     plotDiv.on('plotly_deselect', function(){
       selectedPoints = [];
+      // 範囲選択モードの場合、グローバル変数もクリア
+      if(isBoxSelectModeEnabled){
+        selectedPointIndices.clear();
+        appendLog('範囲選択: 選択を解除しました');
+      }
       console.debug('[plotly_deselect] 選択解除');
     });
     
@@ -2373,7 +2465,29 @@
     const handleKeydown = function(e){
       // Delキーで選択中の点を削除（単一点 or 複数点）
       if(e.key === 'Delete' || e.key === 'Del'){
-        // Box/Lasso selectで複数選択がある場合
+        // 範囲選択モードで選択された点がある場合
+        if(isBoxSelectModeEnabled && selectedPointIndices.size > 0){
+          const remainingCount = editableEnvelope.length - selectedPointIndices.size;
+          if(remainingCount < 2){
+            alert('包絡線には最低2点が必要です。削除できません。');
+            return;
+          }
+          const sortedIndices = Array.from(selectedPointIndices).sort((a,b) => b - a);
+          sortedIndices.forEach(idx => {
+            if(idx >= 0 && idx < editableEnvelope.length){
+              editableEnvelope.splice(idx, 1);
+            }
+          });
+          pushHistory(editableEnvelope);
+          appendLog(`範囲選択で ${selectedPointIndices.size} 点を削除しました`);
+          selectedPointIndices.clear();
+          selectedPoints = [];
+          selectedPointIndex = -1;
+          window._selectedEnvelopePoint = -1;
+          recalculateFromEnvelope(editableEnvelope);
+          return;
+        }
+        // Box/Lasso selectで複数選択がある場合（従来の処理）
         if(selectedPoints.length > 0){
           // 最小2点は残すためのチェック
           const remainingCount = editableEnvelope.length - selectedPoints.length;
