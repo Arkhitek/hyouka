@@ -1178,10 +1178,27 @@
   function calculatePy_LineMethod(envelope, Pmax){
     const p_max = Pmax;
 
-    // Find points at 0.1, 0.4, 0.9 Pmax (using absolute values)
-    const p01 = findPointAtLoad(envelope, 0.1 * p_max);
-    const p04 = findPointAtLoad(envelope, 0.4 * p_max);
-    const p09 = findPointAtLoad(envelope, 0.9 * p_max);
+    // 上昇区間（|Load|が単調増加する部分）を抽出し、後半の下降区間を除外する
+    const ascendingEnvelope = (function(){
+      const asc = [];
+      let last = -Infinity;
+      for(const pt of envelope){
+        const a = Math.abs(pt.Load);
+        if(a + 1e-12 < last){
+          // 下降を検知したらそこで打ち切り
+          break;
+        }
+        asc.push(pt);
+        last = a;
+      }
+      // 安全策: 3点未満なら元の包絡線を使用
+      return asc.length >= 3 ? asc : envelope;
+    })();
+
+    // 0.1, 0.4, 0.9 Pmax を上昇区間内で線形補間
+    const p01 = findPointAtLoadStrict(ascendingEnvelope, 0.1 * p_max);
+    const p04 = findPointAtLoadStrict(ascendingEnvelope, 0.4 * p_max);
+    const p09 = findPointAtLoadStrict(ascendingEnvelope, 0.9 * p_max);
 
     if(!p01 || !p04 || !p09) throw new Error('0.1/0.4/0.9 Pmax の点が見つかりません');
 
@@ -1234,6 +1251,27 @@
     return envelope[envelope.length - 1]; // Fallback
   }
 
+  // 上昇区間に限定して targetLoad を線形補間（失敗時は null を返す）
+  function findPointAtLoadStrict(envelopeAsc, targetLoad){
+    for(let i=0; i<envelopeAsc.length-1; i++){
+      const p1 = envelopeAsc[i];
+      const p2 = envelopeAsc[i+1];
+      const abs1 = Math.abs(p1.Load);
+      const abs2 = Math.abs(p2.Load);
+      if(abs1 <= targetLoad + 1e-12 && abs2 >= targetLoad - 1e-12){
+        const denom = (abs2 - abs1);
+        const ratio = denom !== 0 ? (targetLoad - abs1) / denom : 0;
+        const clamped = Math.max(0, Math.min(1, ratio));
+        return {
+          Load: p1.Load + (p2.Load - p1.Load) * clamped,
+          gamma: p1.gamma + (p2.gamma - p1.gamma) * clamped,
+          gamma0: p1.gamma0 + (p2.gamma0 - p1.gamma0) * clamped
+        };
+      }
+    }
+    return null;
+  }
+
   function findLoadAtGamma(envelope, targetGamma){
     // γ位置での荷重を線形補間で取得
     const absTarget = Math.abs(targetGamma);
@@ -1264,7 +1302,11 @@
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
   function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u){
     // Find δy (gamma where Load = Py on envelope)
-    const pt_y = findPointAtLoad(envelope, Py);
+    // 降伏点は上昇区間から補間（失敗時は従来の単純探索へフォールバック）
+    const asc = (function(){
+      const a=[]; let last=-Infinity; for(const p of envelope){ const L=Math.abs(p.Load); if(L + 1e-12 < last) break; a.push(p); last=L; } return a.length>=2? a : envelope; })();
+    let pt_y = findPointAtLoadStrict(asc, Py);
+    if(!pt_y){ pt_y = findPointAtLoad(envelope, Py); }
     const delta_y = Math.abs(pt_y.gamma);
 
     // Initial stiffness K
@@ -1282,7 +1324,9 @@
     }
 
     // Calculate area S under envelope up to δu
-    const S = calculateAreaUnderEnvelope(envelope, delta_u);
+  const S = calculateAreaUnderEnvelope(envelope, delta_u);
+  // 終局変位位置での包絡線荷重（参考値: 終局時実荷重）
+  const load_at_delta_u = findLoadAtGamma(envelope, delta_u);
 
     // Solve for Pu using energy equivalence (Section IV.1 Step 11-12)
     // S = Pu * (δu - δv/2), where δv = Pu/K
@@ -1312,7 +1356,7 @@
     const lineV = {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
     const lineVI = {gamma_start: delta_v, gamma_end: delta_u, Load: Pu};
 
-    return { delta_y, K, delta_u, S, Pu, delta_v, mu, lineV, lineVI };
+    return { delta_y, K, delta_u, S, Pu, delta_v, mu, lineV, lineVI, load_at_delta_u };
   }
 
   function findDeltaU_08Pmax(envelope, Pmax){
