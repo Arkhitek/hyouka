@@ -1831,6 +1831,54 @@
           font: {size: 12, color: 'red'},
           bgcolor: 'rgba(255,255,255,0.7)',
           bordercolor: 'red', borderwidth: 1
+        },
+        // P0基準ライン (a:Py)
+        {
+          x: 0,
+          y: (p0_a) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `P0(a)=Py=${p0_a.toFixed(2)} kN`,
+          showarrow: false,
+          ax: 0, ay: 0,
+          font: {size: 11, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.6)',
+          bordercolor: 'gray', borderwidth: 0
+        },
+        // P0基準ライン (b:靭性基準)
+        {
+          x: 0,
+          y: (p0_b) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `P0(b)=C0·Pu·√(2μ-1)=${p0_b.toFixed(2)} kN`,
+          showarrow: false,
+          ax: 0, ay: 0,
+          font: {size: 11, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.6)',
+          bordercolor: 'gray', borderwidth: 0
+        },
+        // P0基準ライン (c:最大耐力基準)
+        {
+          x: 0,
+          y: (p0_c) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `P0(c)=2/3·Pmax=${p0_c.toFixed(2)} kN`,
+          showarrow: false,
+          ax: 0, ay: 0,
+          font: {size: 11, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.6)',
+          bordercolor: 'gray', borderwidth: 0
+        },
+        // P0基準ライン (d:特定変形時)
+        {
+          x: 0,
+          y: (p0_d) * envelopeSign,
+          xref: 'x', yref: 'y',
+          text: `P0(d)=P(γs)=${p0_d.toFixed(2)} kN`,
+          showarrow: false,
+          ax: 0, ay: 0,
+          font: {size: 11, color: 'gray'},
+          bgcolor: 'rgba(255,255,255,0.6)',
+          bordercolor: 'gray', borderwidth: 0
         }
       ]
     };
