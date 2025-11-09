@@ -1043,43 +1043,79 @@
 
   // === Envelope Generation (Section II.3) ===
   function generateEnvelope(data, side){
-    // Filter data based on selected side
+    // Filter data based on selected side（符号で片側のみ抽出）
     let filteredData;
     if(side === 'positive'){
-      // Positive side: both gamma and Load must be positive
       filteredData = data.filter(pt => pt.gamma >= 0 && pt.Load >= 0);
     } else {
-      // Negative side: both gamma and Load must be negative
       filteredData = data.filter(pt => pt.gamma <= 0 && pt.Load <= 0);
     }
-    
-    // Do NOT sort - process in original order
-    if(filteredData.length === 0) return [];
-    
-    // Build envelope based on maximum deformation (gamma)
+
+    // 元データ順を維持
+    if(!filteredData || filteredData.length === 0) return [];
+
+    // ルール準拠の包絡線構築:
+    // 1) 最初の立ち上がりからピーク(Pmax)まで: γは非減少、荷重は非減少（小さなノイズは無視）で結ぶ。
+    // 2) Pmax以降: 計測点を結ぶが、破壊による急激な低下点はスキップ可能。
+    const abs = (v) => Math.abs(v);
+    const n = filteredData.length;
+
+    // グローバル最大荷重(Pmax)のインデックス
+    let idxPmax = 0; let maxAbsLoad = -Infinity; let maxAbsGamma = 0;
+    for(let i=0;i<n;i++){
+      const L = abs(filteredData[i].Load);
+      if(L > maxAbsLoad){ maxAbsLoad = L; idxPmax = i; }
+      const g = abs(filteredData[i].gamma); if(g>maxAbsGamma) maxAbsGamma = g;
+    }
+
     const env = [];
-    let maxAbsGamma = 0;
-    
-    for(const pt of filteredData){
-      const absGamma = Math.abs(pt.gamma);
-      
-      // Keep point if it has larger deformation than previous maximum
-      if(absGamma >= maxAbsGamma){
-        maxAbsGamma = absGamma;
-        env.push({...pt});
+    const LOAD_TOL = 0.005 * maxAbsLoad; // 0.5% 許容
+    const ABRUPT_DROP_RATIO = 0.4;       // 40% 以上の急低下
+    const ABRUPT_DROP_GSTEP = Math.max(1e-9, 0.005 * maxAbsGamma); // γ差が全体の0.5%未満
+
+    // 1) 立ち上がり～Pmax まで: γ非減少 & 荷重非減少で上包絡を抽出
+    let lastG = -Infinity;
+    let lastL = -Infinity;
+    for(let i=0;i<=idxPmax;i++){
+      const pt = filteredData[i];
+      const g = abs(pt.gamma);
+      const L = abs(pt.Load);
+      if(g + 1e-15 <= lastG) continue; // γは非減少を維持
+      if(L + LOAD_TOL < lastL) continue; // 荷重が明確に低下する点はスキップ
+      env.push({...pt});
+      lastG = g; lastL = Math.max(lastL, L);
+    }
+    // Pmax点を必ず含める（未含有なら追加）
+    if(env.length === 0 || env[env.length-1] !== filteredData[idxPmax]){
+      env.push({...filteredData[idxPmax]});
+      lastG = abs(filteredData[idxPmax].gamma);
+      lastL = abs(filteredData[idxPmax].Load);
+    }
+
+    // 2) Pmax以降: 計測点を結ぶ。ただし急激な低下点はスキップ可。
+    for(let i=idxPmax+1;i<n;i++){
+      const pt = filteredData[i];
+      const g = abs(pt.gamma);
+      const L = abs(pt.Load);
+      if(g + 1e-15 <= lastG) continue; // γ非減少
+      // 破壊による急低下をスキップ（全体状況に応じ、緩い条件）
+      const gstep = g - lastG;
+      if(lastL > 0 && L < lastL * (1 - ABRUPT_DROP_RATIO) && gstep < ABRUPT_DROP_GSTEP){
+        // スキップ（必要に応じてログ）
+        continue;
       }
+      env.push({...pt});
+      lastG = g; lastL = L;
     }
-    
-    // If envelope is still empty, return the filtered data
-    if(env.length === 0 && filteredData.length > 0){
-      return filteredData;
-    }
-    
-    // Additional safety check
+
+    // フォールバック: 何らかの理由で空の場合は γ単調抽出へ
     if(env.length === 0){
-      console.error('包絡線が空です。データを確認してください。', {side, dataCount: data.length, filteredCount: filteredData.length});
+      let maxG = -Infinity; const simpler = [];
+      for(const pt of filteredData){
+        const g = abs(pt.gamma); if(g >= maxG){ simpler.push({...pt}); maxG = g; }
+      }
+      return simpler.length ? simpler : filteredData;
     }
-    
     return env;
   }
 
