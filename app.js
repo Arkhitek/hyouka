@@ -6,6 +6,10 @@
 
   // === State ===
   let rawData = [];
+  // ユーザー編集保持用フラグ: 包絡線点を手動で変更したら true
+  let envelopeEdited = false;
+  // 最後に生成した包絡線の正負側（side）を記録。side変更時は再生成を強制。
+  let lastEnvelopeSide = null;
   let header = [];
   let envelopeData = null;
   let analysisResults = {};
@@ -338,6 +342,7 @@
     }
     envelopeData[window._selectedEnvelopePoint].gamma = g;
     envelopeData[window._selectedEnvelopePoint].Load = l;
+  envelopeEdited = true;
     appendLog('点を数値編集しました (γ='+g+', P='+l+')');
     pushHistory(envelopeData);
     console.debug('[適用ボタン] closePointEditDialog()を呼び出します');
@@ -657,8 +662,10 @@
   function clearInputData(){
     gammaInput.value = '';
     loadInput.value = '';
-    rawData = [];
-    envelopeData = null;
+  rawData = [];
+  envelopeData = null;
+  envelopeEdited = false;
+  lastEnvelopeSide = null;
     analysisResults = {};
     
   // 自動解析化に伴い、旧ボタンの状態管理は不要
@@ -1181,7 +1188,9 @@
         return;
       }
 
-      rawData = parsed;
+  rawData = parsed;
+  // 元データが変わったので、既存の編集済み包絡線は無効化
+  envelopeEdited = false;
       header = ['Load', 'gamma', 'gamma0'];
   // 自動解析: 旧ボタン無効化不要
 
@@ -1223,35 +1232,52 @@
       // Calculate delta_u_max from 1/maxUltimateDeformationValue
       const delta_u_max = 1.0 / maxUltimateDeformationValue;
 
-      // Generate full envelope from direct input data (計算用フル包絡線)
-      const fullEnvelope = generateEnvelope(rawData, side);
-      if(fullEnvelope.length === 0){
-        console.warn('包絡線の生成に失敗しました');
-        return;
+      // 既存の編集済み包絡線を保持するか判断
+      let useEdited = false;
+      if(envelopeEdited && Array.isArray(envelopeData) && envelopeData.length >= 2 && lastEnvelopeSide === side){
+        useEdited = true;
+        console.info('[processDataDirect] 編集済み包絡線を保持 (side='+side+')');
       }
-      // Calculate characteristic points using full envelope (精度優先)
-      analysisResults = calculateJTCCMMetrics(fullEnvelope, gamma_specific, delta_u_max, L, alpha, c0);
 
-      // After metrics, thin for display preserving δy, δu, γs, loop peaks
-      let displayEnvelope = fullEnvelope;
-      if(fullEnvelope.length > 50){
+      let workingEnvelope;
+      if(useEdited){
+        workingEnvelope = envelopeData.map(p=>({...p}));
+      }else{
+        // Generate full envelope from direct input data (計算用フル包絡線)
+        const fullEnvelope = generateEnvelope(rawData, side);
+        if(fullEnvelope.length === 0){
+          console.warn('包絡線の生成に失敗しました');
+          return;
+        }
+        workingEnvelope = fullEnvelope.map(p=>({...p}));
+        lastEnvelopeSide = side;
+        envelopeEdited = false; // 再生成したので編集フラグをリセット
+      }
+
+      // Calculate characteristic points using working envelope
+      analysisResults = calculateJTCCMMetrics(workingEnvelope, gamma_specific, delta_u_max, L, alpha, c0);
+
+      // 表示用: 未編集時のみ間引き
+      let displayEnvelope = workingEnvelope;
+      if(!useEdited && workingEnvelope.length > 50){
         const mandatoryGammas = [];
         if(Number.isFinite(analysisResults.delta_y)) mandatoryGammas.push(analysisResults.delta_y);
         if(Number.isFinite(analysisResults.delta_u)) mandatoryGammas.push(analysisResults.delta_u);
         if(Number.isFinite(analysisResults.gamma_specific)) mandatoryGammas.push(analysisResults.gamma_specific);
-        // 原データからループ（反転点）を検出し、各ループ最大荷重点のγを保持
         try{
           const loopGammas = detectLoopPeakGammas(rawData, side);
           if(Array.isArray(loopGammas) && loopGammas.length){
             loopGammas.forEach(g => { if(Number.isFinite(g)) mandatoryGammas.push(g); });
           }
         }catch(err){ console.warn('ループピーク検出エラー', err); }
-        displayEnvelope = thinEnvelope(fullEnvelope, 40, 50, mandatoryGammas);
-        console.info('[thinEnvelope] 包絡線点を '+displayEnvelope.length+' 点に間引き（δy/δu/γs/ループ最大荷重を保持）');
+        displayEnvelope = thinEnvelope(workingEnvelope, 40, 50, mandatoryGammas);
+        console.info('[thinEnvelope] 包絡線点を '+displayEnvelope.length+' 点に間引き（未編集）');
       }
 
-      // Set envelopeData to display/thinned version for editing
-      envelopeData = displayEnvelope;
+      if(!useEdited){
+        // Set envelopeData to display/thinned version for editing
+        envelopeData = displayEnvelope;
+      }
 
       // Render results
       renderPlot(envelopeData, analysisResults);
@@ -2834,12 +2860,14 @@
     }
     // 履歴: 変更前を保存
     pushHistory(editableEnvelope);
-    editableEnvelope.splice(pointIndex, 1);
+  editableEnvelope.splice(pointIndex, 1);
+  envelopeEdited = true;
     window._selectedEnvelopePoint = -1; // 選択解除
     updateEnvelopePlot(editableEnvelope);
     recalculateFromEnvelope(editableEnvelope);
     appendLog('包絡線点を削除しました（残り' + editableEnvelope.length + '点）');
-    envelopeData = editableEnvelope.map(p=>({...p}));
+  envelopeData = editableEnvelope.map(p=>({...p}));
+  envelopeEdited = true;
     updateHistoryButtons();
   }
   
@@ -2853,6 +2881,7 @@
       Load: load,
       gamma0: gamma // 簡易的に同値
     });
+    envelopeEdited = true;
     
     updateEnvelopePlot(editableEnvelope);
     recalculateFromEnvelope(editableEnvelope);
@@ -2899,7 +2928,8 @@
     updateEnvelopePlot(editableEnvelope);
     recalculateFromEnvelope(editableEnvelope);
     appendLog('包絡線点を追加しました（γ=' + midGamma.toFixed(6) + ', P=' + midLoad.toFixed(3) + '）');
-    envelopeData = editableEnvelope.map(p=>({...p}));
+  envelopeData = editableEnvelope.map(p=>({...p}));
+  envelopeEdited = true;
     updateHistoryButtons();
   }
   
@@ -3041,6 +3071,7 @@
     try{
       // 編集後の包絡線から特性値を再計算
       envelopeData = editableEnvelope.map(pt => ({...pt}));
+      envelopeEdited = true; // 編集保持フラグ
       
       const L = parseFloat(wall_length_m.value);
       const alpha = parseFloat(alpha_factor.value);
@@ -3358,6 +3389,8 @@
       // Envelopeをユーザ編集対象として設定
       envelopeData = importedEnvelope.map(pt=>({...pt}));
       window._selectedEnvelopePoint = -1; // 選択解除
+      envelopeEdited = true;
+      lastEnvelopeSide = envelope_side ? envelope_side.value : null;
     }
 
     // 再解析・プロット更新
