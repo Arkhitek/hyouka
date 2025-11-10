@@ -69,6 +69,8 @@
       if(isDragModeEnabled){
         toggleDragModeButton.textContent = 'マウスドラッグ移動OFF';
         toggleDragModeButton.style.background = '#f44336'; // 赤
+        // プロットエリアのカーソルを手の形に
+        if(plotDiv) plotDiv.style.cursor = 'grab';
         // 範囲選択モードをOFFにする
         if(isBoxSelectModeEnabled){
           isBoxSelectModeEnabled = false;
@@ -79,6 +81,8 @@
       } else {
         toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
         toggleDragModeButton.style.background = '#4CAF50'; // 緑
+        // カーソルをデフォルトに戻す
+        if(plotDiv) plotDiv.style.cursor = 'default';
       }
     };
   }
@@ -95,6 +99,8 @@
           isDragModeEnabled = false;
           toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
           toggleDragModeButton.style.background = '#4CAF50'; // 緑
+          // カーソルをデフォルトに戻す
+          if(plotDiv) plotDiv.style.cursor = 'default';
         }
         // PlotlyのBox選択モードを有効化
           setPlotDragMode('select'); // 'select'モードにすると、Plotlyが自動的にBox/Lassoを提供
@@ -2644,15 +2650,18 @@
       const pt = data.points[0];
       // 包絡線点（curveNumber === 2）にホバー時、カーソルをポインタに
       if(pt.curveNumber === 2){
-        plotDiv.style.cursor = 'pointer';
+        // ドラッグモードがONなら grab、OFFなら pointer
+        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'pointer';
       } else {
-        plotDiv.style.cursor = 'default';
+        // ドラッグモードがONなら grab、OFFなら default
+        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'default';
       }
     });
     
     plotDiv.on('plotly_unhover', function(){
       if(!shiftDragging){
-        plotDiv.style.cursor = 'default';
+        // ドラッグモードがONなら grab、OFFなら default
+        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'default';
       }
     });
     
@@ -2692,7 +2701,7 @@
         shiftDragIndex = selectedIdx;
         shiftDragStartX = clickX;
         shiftDragStartY = clickY;
-        plotDiv.style.cursor = 'move';
+        plotDiv.style.cursor = 'grabbing'; // ドラッグ中は grabbing
         
         // ツールチップ表示
         if(pointTooltip){
@@ -2782,7 +2791,8 @@
         
         shiftDragging = false;
         shiftDragIndex = -1;
-        plotDiv.style.cursor = 'default';
+        // ドラッグモードONなら grab、OFFなら default に戻す
+        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'default';
         
         // Plotlyのドラッグモードを復元（エラーは握りつぶし）
         if(window.Plotly && plotDiv){
