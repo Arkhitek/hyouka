@@ -1,3 +1,13 @@
+// カーソルを手の形にするホバー処理
+plotDiv.addEventListener('mouseover', function(event) {
+  if (isDragModeEnabled && selectedPointIndices.has(event.target.dataset.index)) {
+    plotDiv.style.cursor = 'grab';
+  }
+});
+
+plotDiv.addEventListener('mouseout', function(event) {
+  plotDiv.style.cursor = 'default';
+});
 // リネーム後: app.js (旧: app_jtccm.js)
 // 仕様はJTCCM準拠だがファイル名から jtccm 文字列を除去
 
