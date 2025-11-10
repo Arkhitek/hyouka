@@ -292,6 +292,8 @@
     }
     window._selectedEnvelopePoint = nextIndex;
     console.debug('[次の点] 選択を移動: index=' + nextIndex);
+    // 赤丸の強調表示を更新
+    highlightSelectedPoint(envelopeData);
     closePointEditDialog();
     openPointEditDialog();
   }
@@ -313,6 +315,8 @@
     }
     window._selectedEnvelopePoint = prevIndex;
     console.debug('[前の点] 選択を移動: index=' + prevIndex);
+    // 赤丸の強調表示を更新
+    highlightSelectedPoint(envelopeData);
     closePointEditDialog();
     openPointEditDialog();
   }
