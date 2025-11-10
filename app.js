@@ -34,6 +34,8 @@
   const processButton = null;
   const downloadExcelButton = document.getElementById('downloadExcelButton');
   const generatePdfButton = document.getElementById('generatePdfButton');
+  const importExcelButton = document.getElementById('importExcelButton');
+  const importExcelInput = document.getElementById('importExcelInput');
   const clearDataButton = document.getElementById('clearDataButton');
   
   const plotDiv = document.getElementById('plot');
@@ -647,20 +649,10 @@
   if(cancelPointEditButton) cancelPointEditButton.addEventListener('click', closePointEditDialog);
   if(prevPointButton) prevPointButton.addEventListener('click', selectPreviousPoint);
   if(nextPointButton) nextPointButton.addEventListener('click', selectNextPoint);
-
-  // キーボードの矢印キーで点の選択を移動
-  document.addEventListener('keydown', function(e){
-    // ダイアログが開いているときのみ動作
-    if(pointEditDialog && pointEditDialog.style.display === 'block'){
-      if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){
-        e.preventDefault();
-        selectPreviousPoint();
-      } else if(e.key === 'ArrowRight' || e.key === 'ArrowDown'){
-        e.preventDefault();
-        selectNextPoint();
-      }
-    }
-  });
+  if(importExcelButton && importExcelInput){
+    importExcelButton.addEventListener('click', ()=> importExcelInput.click());
+    importExcelInput.addEventListener('change', handleImportExcelChange);
+  }
 
   function clearInputData(){
     gammaInput.value = '';
@@ -3223,7 +3215,27 @@
         const cp = wsEnv.getCell(i,2); if(typeof cp.value==='number') cp.numFmt='0.000';
       }
 
-      // 4) グラフシート (画像埋込み)
+      // 4) 設定シート (全入力設定)
+      let wsSettings = wb.getWorksheet('Settings');
+      if(!wsSettings) wsSettings = wb.addWorksheet('Settings');
+      wsSettings.spliceRows(1, wsSettings.rowCount, ['Key','Value']);
+      const settingsRows = [
+        ['wall_preset', wall_preset ? wall_preset.value : ''],
+        ['specimen_name', specimen_name ? specimen_name.value : ''],
+        ['wall_length_m', wall_length_m ? parseFloat(wall_length_m.value) : ''],
+        ['specific_deformation', specific_deformation ? parseFloat(specific_deformation.value) : ''],
+        ['alpha_factor', alpha_factor ? parseFloat(alpha_factor.value) : ''],
+        ['max_ultimate_deformation', max_ultimate_deformation ? parseFloat(max_ultimate_deformation.value) : ''],
+        ['c0_factor', c0_factor ? parseFloat(c0_factor.value) : ''],
+        ['envelope_side', envelope_side ? envelope_side.value : ''],
+        ['show_annotations', show_annotations ? show_annotations.value : '']
+      ];
+      settingsRows.forEach(r => wsSettings.addRow(r));
+      wsSettings.columns.forEach(col => { col.width = 28; });
+      // 簡易フォーマット
+      wsSettings.getRow(1).font = {bold:true};
+
+      // 5) グラフシート (画像埋込み)
       // Chartシート: テンプレートがあれば既存を活用。無ければ画像埋め込みの代替。
       let wsChart = wb.getWorksheet('Chart');
       if(!wsChart){
@@ -3240,6 +3252,7 @@
       wsSummary.getRow(1).font = {bold:true};
       wsInput.getRow(1).font = {bold:true};
       wsEnv.getRow(1).font = {bold:true};
+  if(wsSettings) wsSettings.getRow(1).font = {bold:true};
 
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -3254,6 +3267,112 @@
       console.error('Excel出力エラー:', err);
       alert('Excelの生成に失敗しました。');
       appendLog('Excel出力エラー: ' + (err && err.stack ? err.stack : err.message));
+    }
+  }
+
+  // === Excel Import ===
+  function handleImportExcelChange(e){
+    const file = e && e.target && e.target.files ? e.target.files[0] : null;
+    if(!file) return;
+    importExcel(file)
+      .catch(err => {
+        console.error('Excelインポートエラー:', err);
+        alert('Excelの読み込みに失敗しました。ファイル形式や内容をご確認ください。');
+      })
+      .finally(()=>{ try{ e.target.value=''; }catch(_){} });
+  }
+
+  async function importExcel(file){
+    if(!window.ExcelJS){
+      alert('ExcelJSライブラリが読み込まれていません');
+      return;
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(arrayBuffer);
+
+    // Settingsの読み込み
+    const wsSettings = wb.getWorksheet('Settings');
+    const settings = new Map();
+    if(wsSettings && wsSettings.rowCount >= 2){
+      for(let r=2; r<=wsSettings.rowCount; r++){
+        const key = wsSettings.getCell(r,1).value;
+        const val = wsSettings.getCell(r,2).value;
+        if(key) settings.set(String(key), val);
+      }
+    }
+    // DOMへ反映（存在するもののみ）
+    const setIf = (el, v) => { if(el!=null && typeof v!== 'undefined' && v!== null) el.value = String(v); };
+    setIf(wall_preset, settings.get('wall_preset'));
+    setIf(specimen_name, settings.get('specimen_name'));
+    setIf(wall_length_m, settings.get('wall_length_m'));
+    setIf(specific_deformation, settings.get('specific_deformation'));
+    setIf(alpha_factor, settings.get('alpha_factor'));
+    setIf(max_ultimate_deformation, settings.get('max_ultimate_deformation'));
+    setIf(c0_factor, settings.get('c0_factor'));
+    setIf(envelope_side, settings.get('envelope_side'));
+    setIf(show_annotations, settings.get('show_annotations'));
+
+    // InputDataの読み込み → rawData復元 + テキストエリアへも反映
+    const wsInput = wb.getWorksheet('InputData');
+    const importedData = [];
+    if(wsInput && wsInput.rowCount >= 2){
+      for(let r=2; r<=wsInput.rowCount; r++){
+        const g = wsInput.getCell(r,1).value;
+        const p = wsInput.getCell(r,2).value;
+        const gg = (typeof g === 'object' && g && 'result' in g) ? g.result : g; // ExcelJSの数式互換
+        const pp = (typeof p === 'object' && p && 'result' in p) ? p.result : p;
+        const gnum = parseFloat(gg);
+        const pnum = parseFloat(pp);
+        if(Number.isFinite(gnum) && Number.isFinite(pnum)){
+          importedData.push({gamma:gnum, Load:pnum});
+        }
+      }
+    }
+    if(importedData.length){
+      rawData = importedData.map(d => ({gamma:d.gamma, Load:d.Load}));
+      // テキストエリアへ反映（ユーザ視認用）
+      gammaInput.value = importedData.map(d=>d.gamma).join('\n');
+      loadInput.value = importedData.map(d=>d.Load).join('\n');
+    }
+
+    // Envelopeシートの読み込み（存在すれば編集用包絡線として採用）
+    const wsEnv = wb.getWorksheet('Envelope');
+    let importedEnvelope = [];
+    if(wsEnv && wsEnv.rowCount >= 2){
+      for(let r=2; r<=wsEnv.rowCount; r++){
+        const g = wsEnv.getCell(r,1).value;
+        const p = wsEnv.getCell(r,2).value;
+        const gg = (typeof g === 'object' && g && 'result' in g) ? g.result : g;
+        const pp = (typeof p === 'object' && p && 'result' in p) ? p.result : p;
+        const gnum = parseFloat(gg);
+        const pnum = parseFloat(pp);
+        if(Number.isFinite(gnum) && Number.isFinite(pnum)){
+          importedEnvelope.push({gamma:gnum, Load:pnum, gamma0:gnum});
+        }
+      }
+    }
+    if(importedEnvelope.length){
+      // Envelopeをユーザ編集対象として設定
+      envelopeData = importedEnvelope.map(pt=>({...pt}));
+      window._selectedEnvelopePoint = -1; // 選択解除
+    }
+
+    // 再解析・プロット更新
+    try{
+      if(importedEnvelope.length){
+        // Envelopeを直接再計算に使用（rawDataからの生成をスキップ）
+        recalculateFromEnvelope(envelopeData);
+        renderPlot(envelopeData, analysisResults);
+        renderResults(analysisResults);
+        appendLog('Excelから設定・入力データ・Envelopeをインポートしました');
+      }else{
+        // 通常処理: rawDataから包絡線生成
+        processDataDirect();
+        appendLog('Excelから設定と入力データをインポートしました (Envelopeは再生成)');
+      }
+    }catch(err){
+      console.warn('インポート後の再計算でエラー', err);
     }
   }
 
