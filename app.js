@@ -3218,17 +3218,17 @@
       // 4) 設定シート (全入力設定)
       let wsSettings = wb.getWorksheet('Settings');
       if(!wsSettings) wsSettings = wb.addWorksheet('Settings');
-      wsSettings.spliceRows(1, wsSettings.rowCount, ['Key','Value']);
+      wsSettings.spliceRows(1, wsSettings.rowCount, ['項目','値','Key']);
       const settingsRows = [
-        ['wall_preset', wall_preset ? wall_preset.value : ''],
-        ['specimen_name', specimen_name ? specimen_name.value : ''],
-        ['wall_length_m', wall_length_m ? parseFloat(wall_length_m.value) : ''],
-        ['specific_deformation', specific_deformation ? parseFloat(specific_deformation.value) : ''],
-        ['alpha_factor', alpha_factor ? parseFloat(alpha_factor.value) : ''],
-        ['max_ultimate_deformation', max_ultimate_deformation ? parseFloat(max_ultimate_deformation.value) : ''],
-        ['c0_factor', c0_factor ? parseFloat(c0_factor.value) : ''],
-        ['envelope_side', envelope_side ? envelope_side.value : ''],
-        ['show_annotations', show_annotations ? show_annotations.value : '']
+        ['対象耐力壁', wall_preset ? wall_preset.value : '', 'wall_preset'],
+        ['試験体名称', specimen_name ? specimen_name.value : '', 'specimen_name'],
+        ['壁長さ L (m)', wall_length_m ? parseFloat(wall_length_m.value) : '', 'wall_length_m'],
+        ['特定変形時耐力の変形角 (1/入力値 rad)', specific_deformation ? parseFloat(specific_deformation.value) : '', 'specific_deformation'],
+        ['耐力低減係数 α', alpha_factor ? parseFloat(alpha_factor.value) : '', 'alpha_factor'],
+        ['終局変位の最大値 (1/入力値 rad)', max_ultimate_deformation ? parseFloat(max_ultimate_deformation.value) : '', 'max_ultimate_deformation'],
+        ['靭性基準係数 C0', c0_factor ? parseFloat(c0_factor.value) : '', 'c0_factor'],
+        ['評価対象包絡線', envelope_side ? envelope_side.value : '', 'envelope_side'],
+        ['グラフ注釈表示', show_annotations ? show_annotations.value : '', 'show_annotations']
       ];
       settingsRows.forEach(r => wsSettings.addRow(r));
       wsSettings.columns.forEach(col => { col.width = 28; });
@@ -3296,7 +3296,9 @@
     const settings = new Map();
     if(wsSettings && wsSettings.rowCount >= 2){
       for(let r=2; r<=wsSettings.rowCount; r++){
-        const key = wsSettings.getCell(r,1).value;
+        // 新形式: Col3=Key, 旧形式: Col1=Key
+        const key3 = wsSettings.getCell(r,3).value;
+        const key = (key3 !== undefined && key3 !== null && key3 !== '') ? key3 : wsSettings.getCell(r,1).value;
         const val = wsSettings.getCell(r,2).value;
         if(key) settings.set(String(key), val);
       }
