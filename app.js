@@ -2663,17 +2663,25 @@
     plotDiv.on('plotly_hover', function(data){
       if(!data.points || data.points.length === 0) return;
       const pt = data.points[0];
+      const dragLayerEl = plotDiv.querySelector('.draglayer');
+      const svgContainerEl = plotDiv.querySelector('.svg-container');
       // 包絡線点（curveNumber === 2）にホバー時：
       // ドラッグモードONかつその点が現在選択中の場合にのみ手の形を表示する
       if(pt.curveNumber === 2){
         if(isDragModeEnabled && window._selectedEnvelopePoint === pt.pointIndex){
           plotDiv.style.cursor = 'grab';
+          if(dragLayerEl) dragLayerEl.style.cursor = 'grab';
+          if(svgContainerEl) svgContainerEl.style.cursor = 'grab';
         } else {
           plotDiv.style.cursor = 'pointer';
+          if(dragLayerEl) dragLayerEl.style.cursor = 'pointer';
+          if(svgContainerEl) svgContainerEl.style.cursor = 'pointer';
         }
       } else {
         // 他トレース上はデフォルトカーソル
         plotDiv.style.cursor = 'default';
+        if(dragLayerEl) dragLayerEl.style.cursor = '';
+        if(svgContainerEl) svgContainerEl.style.cursor = '';
       }
     });
 
@@ -2681,6 +2689,10 @@
       if(!shiftDragging){
         // ホバー解除ではデフォルトに戻す（ドラッグ中は変更しない）
         plotDiv.style.cursor = 'default';
+        const dragLayerEl = plotDiv.querySelector('.draglayer');
+        const svgContainerEl = plotDiv.querySelector('.svg-container');
+        if(dragLayerEl) dragLayerEl.style.cursor = '';
+        if(svgContainerEl) svgContainerEl.style.cursor = '';
       }
     });
     
