@@ -48,6 +48,8 @@
   const cancelPointEditButton = document.getElementById('cancelPointEdit');
   const toggleDragModeButton = document.getElementById('toggleDragMode');
   const toggleBoxSelectModeButton = document.getElementById('toggleBoxSelectMode');
+  const prevPointButton = document.getElementById('prevPointButton');
+  const nextPointButton = document.getElementById('nextPointButton');
 
   // ドラッグモードの状態（グローバル変数）
   let isDragModeEnabled = false;
@@ -271,6 +273,48 @@
       content.style.transform = '';
     }
     console.debug('[ダイアログ] 閉じました');
+  }
+
+  function selectNextPoint(){
+    console.debug('[次の点] クリックされました');
+    if(!envelopeData || envelopeData.length === 0) {
+      console.warn('[次の点] 包絡線データがありません');
+      return;
+    }
+    if(window._selectedEnvelopePoint < 0) {
+      console.warn('[次の点] 選択点がありません');
+      return;
+    }
+    const nextIndex = window._selectedEnvelopePoint + 1;
+    if(nextIndex >= envelopeData.length) {
+      console.debug('[次の点] すでに最後の点です');
+      return;
+    }
+    window._selectedEnvelopePoint = nextIndex;
+    console.debug('[次の点] 選択を移動: index=' + nextIndex);
+    closePointEditDialog();
+    openPointEditDialog();
+  }
+
+  function selectPreviousPoint(){
+    console.debug('[前の点] クリックされました');
+    if(!envelopeData || envelopeData.length === 0) {
+      console.warn('[前の点] 包絡線データがありません');
+      return;
+    }
+    if(window._selectedEnvelopePoint < 0) {
+      console.warn('[前の点] 選択点がありません');
+      return;
+    }
+    const prevIndex = window._selectedEnvelopePoint - 1;
+    if(prevIndex < 0) {
+      console.debug('[前の点] すでに最初の点です');
+      return;
+    }
+    window._selectedEnvelopePoint = prevIndex;
+    console.debug('[前の点] 選択を移動: index=' + prevIndex);
+    closePointEditDialog();
+    openPointEditDialog();
   }
 
   function applyPointEdit(){
@@ -597,7 +641,22 @@
   if(openPointEditButton) openPointEditButton.addEventListener('click', openPointEditDialog);
   if(applyPointEditButton) applyPointEditButton.addEventListener('click', applyPointEdit);
   if(cancelPointEditButton) cancelPointEditButton.addEventListener('click', closePointEditDialog);
+  if(prevPointButton) prevPointButton.addEventListener('click', selectPreviousPoint);
+  if(nextPointButton) nextPointButton.addEventListener('click', selectNextPoint);
 
+  // キーボードの矢印キーで点の選択を移動
+  document.addEventListener('keydown', function(e){
+    // ダイアログが開いているときのみ動作
+    if(pointEditDialog && pointEditDialog.style.display === 'block'){
+      if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){
+        e.preventDefault();
+        selectPreviousPoint();
+      } else if(e.key === 'ArrowRight' || e.key === 'ArrowDown'){
+        e.preventDefault();
+        selectNextPoint();
+      }
+    }
+  });
 
   function clearInputData(){
     gammaInput.value = '';
