@@ -69,15 +69,7 @@
       if(isDragModeEnabled){
         toggleDragModeButton.textContent = 'マウスドラッグ移動OFF';
         toggleDragModeButton.style.background = '#f44336'; // 赤
-        // プロットエリアのカーソルを手の形に（Plotlyのdraglayerも含む）
-        if(plotDiv){
-          plotDiv.style.cursor = 'grab';
-          const dragLayer = plotDiv.querySelector('.draglayer');
-          if(dragLayer) dragLayer.style.cursor = 'grab';
-          // svgレイヤーにも適用
-          const svgLayer = plotDiv.querySelector('.svg-container');
-          if(svgLayer) svgLayer.style.cursor = 'grab';
-        }
+        // カーソルは選択点にホバーした時のみ手の形にする（hover ハンドラ側で制御）
         // 範囲選択モードをOFFにする
         if(isBoxSelectModeEnabled){
           isBoxSelectModeEnabled = false;
@@ -2445,13 +2437,7 @@
       setupEnvelopeEditing(editableEnvelope);
       
       // ドラッグモードがONの場合、カーソルを手の形に設定
-      if(isDragModeEnabled){
-        plotDiv.style.cursor = 'grab';
-        const dragLayer = plotDiv.querySelector('.draglayer');
-        if(dragLayer) dragLayer.style.cursor = 'grab';
-        const svgLayer = plotDiv.querySelector('.svg-container');
-        if(svgLayer) svgLayer.style.cursor = 'grab';
-      }
+      // カーソルは hover イベントで制御する（選択点にホバーしたときのみ手の形にする）
       
       // Autoscale（モードバーやダブルクリック）が発火した場合も包絡線範囲へ調整
       if(!relayoutHandlerAttached){
@@ -2676,20 +2662,24 @@
     plotDiv.on('plotly_hover', function(data){
       if(!data.points || data.points.length === 0) return;
       const pt = data.points[0];
-      // 包絡線点（curveNumber === 2）にホバー時、カーソルをポインタに
+      // 包絡線点（curveNumber === 2）にホバー時：
+      // ドラッグモードONかつその点が現在選択中の場合にのみ手の形を表示する
       if(pt.curveNumber === 2){
-        // ドラッグモードがONなら grab、OFFなら pointer
-        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'pointer';
+        if(isDragModeEnabled && window._selectedEnvelopePoint === pt.pointIndex){
+          plotDiv.style.cursor = 'grab';
+        } else {
+          plotDiv.style.cursor = 'pointer';
+        }
       } else {
-        // ドラッグモードがONなら grab、OFFなら default
-        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'default';
+        // 他トレース上はデフォルトカーソル
+        plotDiv.style.cursor = 'default';
       }
     });
-    
+
     plotDiv.on('plotly_unhover', function(){
       if(!shiftDragging){
-        // ドラッグモードがONなら grab、OFFなら default
-        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'default';
+        // ホバー解除ではデフォルトに戻す（ドラッグ中は変更しない）
+        plotDiv.style.cursor = 'default';
       }
     });
     
@@ -2817,10 +2807,10 @@
           pointTooltip.style.display = 'none';
         }
         
-        shiftDragging = false;
-        shiftDragIndex = -1;
-        // ドラッグモードONなら grab、OFFなら default に戻す
-        plotDiv.style.cursor = isDragModeEnabled ? 'grab' : 'default';
+  shiftDragging = false;
+  shiftDragIndex = -1;
+  // ドラッグ終了時は一旦デフォルトに戻す。ホバーが続いていれば hover handler が再度設定する。
+  plotDiv.style.cursor = 'default';
         
         // Plotlyのドラッグモードを復元（エラーは握りつぶし）
         if(window.Plotly && plotDiv){
