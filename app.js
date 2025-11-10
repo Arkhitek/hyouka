@@ -69,8 +69,15 @@
       if(isDragModeEnabled){
         toggleDragModeButton.textContent = 'マウスドラッグ移動OFF';
         toggleDragModeButton.style.background = '#f44336'; // 赤
-        // プロットエリアのカーソルを手の形に
-        if(plotDiv) plotDiv.style.cursor = 'grab';
+        // プロットエリアのカーソルを手の形に（Plotlyのdraglayerも含む）
+        if(plotDiv){
+          plotDiv.style.cursor = 'grab';
+          const dragLayer = plotDiv.querySelector('.draglayer');
+          if(dragLayer) dragLayer.style.cursor = 'grab';
+          // svgレイヤーにも適用
+          const svgLayer = plotDiv.querySelector('.svg-container');
+          if(svgLayer) svgLayer.style.cursor = 'grab';
+        }
         // 範囲選択モードをOFFにする
         if(isBoxSelectModeEnabled){
           isBoxSelectModeEnabled = false;
@@ -82,7 +89,13 @@
         toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
         toggleDragModeButton.style.background = '#4CAF50'; // 緑
         // カーソルをデフォルトに戻す
-        if(plotDiv) plotDiv.style.cursor = 'default';
+        if(plotDiv){
+          plotDiv.style.cursor = 'default';
+          const dragLayer = plotDiv.querySelector('.draglayer');
+          if(dragLayer) dragLayer.style.cursor = '';
+          const svgLayer = plotDiv.querySelector('.svg-container');
+          if(svgLayer) svgLayer.style.cursor = '';
+        }
       }
     };
   }
@@ -100,7 +113,13 @@
           toggleDragModeButton.textContent = 'マウスドラッグ移動ON';
           toggleDragModeButton.style.background = '#4CAF50'; // 緑
           // カーソルをデフォルトに戻す
-          if(plotDiv) plotDiv.style.cursor = 'default';
+          if(plotDiv){
+            plotDiv.style.cursor = 'default';
+            const dragLayer = plotDiv.querySelector('.draglayer');
+            if(dragLayer) dragLayer.style.cursor = '';
+            const svgLayer = plotDiv.querySelector('.svg-container');
+            if(svgLayer) svgLayer.style.cursor = '';
+          }
         }
         // PlotlyのBox選択モードを有効化
           setPlotDragMode('select'); // 'select'モードにすると、Plotlyが自動的にBox/Lassoを提供
@@ -2424,6 +2443,15 @@
     .then(function(){
       // 包絡線点の編集機能を実装
       setupEnvelopeEditing(editableEnvelope);
+      
+      // ドラッグモードがONの場合、カーソルを手の形に設定
+      if(isDragModeEnabled){
+        plotDiv.style.cursor = 'grab';
+        const dragLayer = plotDiv.querySelector('.draglayer');
+        if(dragLayer) dragLayer.style.cursor = 'grab';
+        const svgLayer = plotDiv.querySelector('.svg-container');
+        if(svgLayer) svgLayer.style.cursor = 'grab';
+      }
       
       // Autoscale（モードバーやダブルクリック）が発火した場合も包絡線範囲へ調整
       if(!relayoutHandlerAttached){
