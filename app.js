@@ -1,13 +1,4 @@
-// カーソルを手の形にするホバー処理
-plotDiv.addEventListener('mouseover', function(event) {
-  if (isDragModeEnabled && selectedPointIndices.has(event.target.dataset.index)) {
-    plotDiv.style.cursor = 'grab';
-  }
-});
-
-plotDiv.addEventListener('mouseout', function(event) {
-  plotDiv.style.cursor = 'default';
-});
+// （削除）カーソルホバー処理はPlotlyのhover/unhoverイベント内で設定します
 // リネーム後: app.js (旧: app_jtccm.js)
 // 仕様はJTCCM準拠だがファイル名から jtccm 文字列を除去
 
