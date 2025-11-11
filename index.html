@@ -194,6 +194,19 @@
 
   <div class="card" style="padding: 15px;">
     <div class="control-group">
+      <label for="thinning_rate">包絡線点の間引き率</label>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 0.9em; color: #666;">低</span>
+        <input type="range" id="thinning_rate" min="0" max="100" value="50" step="1" style="flex: 1;" />
+        <span style="font-size: 0.9em; color: #666;">高</span>
+        <span id="thinning_rate_value" style="min-width: 60px; text-align: right; font-weight: bold;">標準</span>
+      </div>
+      <small>間引き率を調整します（低: 間引き無し、高: 最大間引き）</small>
+    </div>
+  </div>
+
+  <div class="card" style="padding: 15px;">
+    <div class="control-group">
       <label for="show_annotations">グラフ注釈表示</label>
       <select id="show_annotations">
         <option value="all">すべて表示</option>

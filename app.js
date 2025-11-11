@@ -35,6 +35,8 @@
   const envelope_side = document.getElementById('envelope_side');
   const specimen_name = document.getElementById('specimen_name');
   const show_annotations = document.getElementById('show_annotations');
+  const thinning_rate = document.getElementById('thinning_rate');
+  const thinning_rate_value = document.getElementById('thinning_rate_value');
   // 手動解析ボタンは廃止
   const processButton = null;
   const downloadExcelButton = document.getElementById('downloadExcelButton');
@@ -661,6 +663,35 @@
       }
     });
   }
+  
+  // 間引き率スライダーのイベントリスナー
+  if(thinning_rate && thinning_rate_value){
+    // スライダー値の表示更新
+    const updateThinningDisplay = (value) => {
+      if(value == 0){
+        thinning_rate_value.textContent = '無し';
+      } else if(value < 30){
+        thinning_rate_value.textContent = '弱';
+      } else if(value < 70){
+        thinning_rate_value.textContent = '標準';
+      } else {
+        thinning_rate_value.textContent = '強';
+      }
+    };
+    
+    updateThinningDisplay(thinning_rate.value);
+    
+    thinning_rate.addEventListener('input', (e) => {
+      updateThinningDisplay(e.target.value);
+    });
+    
+    thinning_rate.addEventListener('change', () => {
+      if(rawData && rawData.length>=3){
+        scheduleAutoRun();
+      }
+    });
+  }
+  
   if(downloadExcelButton) downloadExcelButton.addEventListener('click', downloadExcel);
   if(generatePdfButton) generatePdfButton.addEventListener('click', generatePdfReport);
   clearDataButton.addEventListener('click', clearInputData);
@@ -1315,10 +1346,18 @@
 
 
   // === Envelope Generation (Section II.3) ===
-  // 包絡線間引き（Ramer-Douglas-Peucker 風）: 重要点保持しつつ 40～50 点程度へ縮約
+  // 包絡線間引き: 重要点保持しつつ、間引き率に応じた点数へ縮約
   function thinEnvelope(envelope, mandatoryGammas){
     try{
       if(!Array.isArray(envelope) || envelope.length === 0) return envelope.map(pt=>({...pt}));
+      
+      // 間引き率の取得 (0-100)
+      const thinningRateValue = thinning_rate ? parseInt(thinning_rate.value) : 50;
+      
+      // 間引き率0の場合は間引き無し
+      if(thinningRateValue === 0){
+        return envelope.map(pt=>({...pt}));
+      }
       
       const pts = envelope.map(pt => ({x: pt.gamma, y: pt.Load}));
       
@@ -1360,11 +1399,32 @@
         }
       }
       
-      // 適切な目標点数を自動決定
-      // 元の点数に応じて適応的に決定: √(元の点数) * 定数 で適度な間引き
-      // 最小20点、最大100点の範囲で調整
-      const baseFactor = Math.sqrt(envelope.length) * 3.5;
-      const targetPoints = Math.max(20, Math.min(100, Math.round(baseFactor)));
+      // 間引き率に応じた目標点数を計算
+      // thinningRateValue: 0(無し) → 100(最大)
+      // 目標点数: 元の点数 → 20点
+      let targetPoints;
+      if(thinningRateValue >= 100){
+        // 最大間引き: 20点
+        targetPoints = 20;
+      } else {
+        // 線形補間: rate=0で元の点数、rate=100で20点
+        const minPoints = 20;
+        const maxPoints = envelope.length;
+        // rate=50でデフォルト動作（√(元の点数) * 3.5）
+        const defaultPoints = Math.max(20, Math.min(100, Math.round(Math.sqrt(envelope.length) * 3.5)));
+        
+        if(thinningRateValue <= 50){
+          // 0-50: 元の点数 → デフォルト点数
+          const t = thinningRateValue / 50.0;
+          targetPoints = Math.round(maxPoints - t * (maxPoints - defaultPoints));
+        } else {
+          // 50-100: デフォルト点数 → 20点
+          const t = (thinningRateValue - 50) / 50.0;
+          targetPoints = Math.round(defaultPoints - t * (defaultPoints - minPoints));
+        }
+      }
+      
+      targetPoints = Math.max(20, Math.min(envelope.length, targetPoints));
       
       // 既に目標点数以下の場合は間引き不要
       if(envelope.length <= targetPoints){
@@ -3264,7 +3324,8 @@
         ['終局変位の最大値 (1/入力値 rad)', max_ultimate_deformation ? parseFloat(max_ultimate_deformation.value) : '', 'max_ultimate_deformation'],
         ['靭性基準係数 C0', c0_factor ? parseFloat(c0_factor.value) : '', 'c0_factor'],
         ['評価対象包絡線', envelope_side ? envelope_side.value : '', 'envelope_side'],
-        ['グラフ注釈表示', show_annotations ? show_annotations.value : '', 'show_annotations']
+        ['グラフ注釈表示', show_annotations ? show_annotations.value : '', 'show_annotations'],
+        ['包絡線点の間引き率', thinning_rate ? parseInt(thinning_rate.value) : 50, 'thinning_rate']
       ];
       settingsRows.forEach(r => wsSettings.addRow(r));
       wsSettings.columns.forEach(col => { col.width = 28; });
@@ -3350,6 +3411,23 @@
     setIf(c0_factor, settings.get('c0_factor'));
     setIf(envelope_side, settings.get('envelope_side'));
     setIf(show_annotations, settings.get('show_annotations'));
+    const thinningRateVal = settings.get('thinning_rate');
+    if(thinning_rate && thinningRateVal !== null && thinningRateVal !== undefined){
+      thinning_rate.value = thinningRateVal;
+      // 表示も更新
+      if(thinning_rate_value){
+        const val = parseInt(thinningRateVal);
+        if(val == 0){
+          thinning_rate_value.textContent = '無し';
+        } else if(val < 30){
+          thinning_rate_value.textContent = '弱';
+        } else if(val < 70){
+          thinning_rate_value.textContent = '標準';
+        } else {
+          thinning_rate_value.textContent = '強';
+        }
+      }
+    }
 
     // InputDataの読み込み → rawData復元 + テキストエリアへも反映
     const wsInput = wb.getWorksheet('InputData');
