@@ -1277,7 +1277,7 @@
 
       // 表示用: 未編集時のみ間引き
       let displayEnvelope = workingEnvelope;
-      if(!useEdited && workingEnvelope.length > 50){
+      if(!useEdited && workingEnvelope.length > 100){
         const mandatoryGammas = [];
         if(Number.isFinite(analysisResults.delta_y)) mandatoryGammas.push(analysisResults.delta_y);
         if(Number.isFinite(analysisResults.delta_u)) mandatoryGammas.push(analysisResults.delta_u);
@@ -1288,7 +1288,7 @@
             loopGammas.forEach(g => { if(Number.isFinite(g)) mandatoryGammas.push(g); });
           }
         }catch(err){ console.warn('ループピーク検出エラー', err); }
-        displayEnvelope = thinEnvelope(workingEnvelope, 40, 50, mandatoryGammas);
+        displayEnvelope = thinEnvelope(workingEnvelope, mandatoryGammas);
         console.info('[thinEnvelope] 包絡線点を '+displayEnvelope.length+' 点に間引き（未編集）');
       }
 
@@ -1316,14 +1316,26 @@
 
   // === Envelope Generation (Section II.3) ===
   // 包絡線間引き（Ramer-Douglas-Peucker 風）: 重要点保持しつつ 40～50 点程度へ縮約
-  function thinEnvelope(envelope, minPoints, maxPoints, mandatoryGammas){
+  function thinEnvelope(envelope, mandatoryGammas){
     try{
-      if(!Array.isArray(envelope) || envelope.length <= maxPoints) return envelope.map(pt=>({...pt}));
+      if(!Array.isArray(envelope) || envelope.length === 0) return envelope.map(pt=>({...pt}));
+      
       const pts = envelope.map(pt => ({x: pt.gamma, y: pt.Load}));
+      
+      // 弧長(累積距離)を計算
+      const arcLengths = [0];
+      for(let i=1; i<pts.length; i++){
+        const dx = pts[i].x - pts[i-1].x;
+        const dy = pts[i].y - pts[i-1].y;
+        arcLengths.push(arcLengths[i-1] + Math.hypot(dx, dy));
+      }
+      const totalLength = arcLengths[arcLengths.length-1];
+      
       // 重要点候補（必ず保持）: 先頭, 最終, 最大荷重点
       let idxPmax = 0; let maxAbs = -Infinity;
       for(let i=0;i<pts.length;i++){ const a = Math.abs(pts[i].y); if(a>maxAbs){ maxAbs=a; idxPmax=i; } }
       const mandatory = new Set([0, pts.length-1, idxPmax]);
+      
       // 追加必須点: 指定された γ 値（δy, δu, γs）に最も近い点
       if(Array.isArray(mandatoryGammas)){
         mandatoryGammas.forEach(gTarget => {
@@ -1336,131 +1348,83 @@
           if(bestIdx >= 0) mandatory.add(bestIdx);
         });
       }
-      // 各ループ（繰返し）の最大荷重点（局所ピーク）を必須保持点に追加
-      // 単純な局所最大検出: y[i] >= y[i-1] かつ y[i] >= y[i+1] （絶対値ベース）
+      
+      // 局所ピーク（ループ最大荷重点）を検出（優先候補として扱う）
+      const localPeaks = new Set();
       for(let i=1;i<pts.length-1;i++){
         const y0 = Math.abs(pts[i-1].y);
         const y1 = Math.abs(pts[i].y);
         const y2 = Math.abs(pts[i+1].y);
         if(y1 >= y0 && y1 >= y2){
-          mandatory.add(i);
+          localPeaks.add(i);
         }
       }
-      // もし必須点だけで maxPoints を超える場合は必須点から優先順位で削減
-      if(mandatory.size > maxPoints){
-        // 優先順位: 0(先頭), last(末尾), Pmax, δy/δu/γs近傍, その他ループピーク
-        const mustArr = Array.from(mandatory);
-        const priorityCore = [0, pts.length-1, idxPmax];
-        const core = mustArr.filter(i=>priorityCore.includes(i));
-        const others = mustArr.filter(i=>!priorityCore.includes(i));
-        // コア + 均等サンプリングで maxPoints に収める
-        const need = maxPoints - core.length;
-        if(need <= 0){
-          return core.sort((a,b)=>a-b).map(i=>({...envelope[i]}));
-        }
-        const step = others.length / (need + 1);
-        const chosen = [];
-        for(let j=1; j<=need; j++){
-          const pick = others[Math.min(others.length-1, Math.round(j*step)-1)];
-          if(pick !== undefined) chosen.push(pick);
-        }
-        return core.concat(chosen).sort((a,b)=>a-b).map(i=>({...envelope[i]}));
+      
+      // 適切な目標点数を自動決定
+      // 元の点数に応じて適応的に決定: √(元の点数) * 定数 で適度な間引き
+      // 最小20点、最大100点の範囲で調整
+      const baseFactor = Math.sqrt(envelope.length) * 3.5;
+      const targetPoints = Math.max(20, Math.min(100, Math.round(baseFactor)));
+      
+      // 既に目標点数以下の場合は間引き不要
+      if(envelope.length <= targetPoints){
+        return envelope.map(pt=>({...pt}));
       }
-
-      // 弧長(累積距離)を計算
-      const arcLengths = [0];
-      for(let i=1; i<pts.length; i++){
-        const dx = pts[i].x - pts[i-1].x;
-        const dy = pts[i].y - pts[i-1].y;
-        arcLengths.push(arcLengths[i-1] + Math.hypot(dx, dy));
-      }
-      const totalLength = arcLengths[arcLengths.length-1];
-
-      // 均等分割ベースの間引き（必須点を保持しつつ、弧長に沿って均等にサンプリング）
-      const targetPoints = Math.min(maxPoints, Math.max(minPoints, Math.floor((minPoints + maxPoints) / 2)));
+      
+      // ステップ1: 均等な弧長間隔でサンプリング
       const selected = new Set(mandatory); // 必須点は最初に選択
+      const uniformInterval = totalLength / (targetPoints - 1);
       
-      // 必須点をインデックス順にソート
-      const mandatoryArray = Array.from(mandatory).sort((a,b) => a-b);
-      
-      // 必須点の間の区間を均等に補完
-      for(let m=0; m<mandatoryArray.length-1; m++){
-        const startIdx = mandatoryArray[m];
-        const endIdx = mandatoryArray[m+1];
-        const segmentStartArc = arcLengths[startIdx];
-        const segmentEndArc = arcLengths[endIdx];
-        const segmentLength = segmentEndArc - segmentStartArc;
-        
-        if(segmentLength <= 0) continue;
-        
-        // この区間に割り当てる追加点数（区間長に比例、最低0点）
-        const additionalPointsNeeded = Math.max(0, targetPoints - selected.size);
-        if(additionalPointsNeeded <= 0) break;
-        
-        const segmentRatio = segmentLength / totalLength;
-        const pointsForSegment = Math.max(0, Math.round(additionalPointsNeeded * segmentRatio));
-        
-        if(pointsForSegment > 0){
-          // 区間内を弧長で均等分割
-          const arcStep = segmentLength / (pointsForSegment + 1);
-          for(let j=1; j<=pointsForSegment; j++){
-            const targetArc = segmentStartArc + j * arcStep;
-            // targetArcに最も近いインデックスを探す
-            let bestIdx = startIdx;
-            let bestDiff = Infinity;
-            for(let k=startIdx+1; k<endIdx; k++){
-              const diff = Math.abs(arcLengths[k] - targetArc);
-              if(diff < bestDiff){
-                bestDiff = diff;
-                bestIdx = k;
-              }
-            }
-            if(bestIdx > startIdx && bestIdx < endIdx){
-              selected.add(bestIdx);
-            }
+      for(let j=1; j<targetPoints-1; j++){
+        const targetArc = j * uniformInterval;
+        // targetArcに最も近いインデックスを探す
+        let bestIdx = -1;
+        let bestDiff = Infinity;
+        for(let k=0; k<arcLengths.length; k++){
+          const diff = Math.abs(arcLengths[k] - targetArc);
+          if(diff < bestDiff){
+            bestDiff = diff;
+            bestIdx = k;
           }
+        }
+        if(bestIdx >= 0 && bestIdx < pts.length){
+          selected.add(bestIdx);
         }
       }
       
-      // まだ目標点数に達していない場合、全体から均等にサンプリング
-      if(selected.size < minPoints){
-        const remaining = [];
-        for(let i=0; i<pts.length; i++){
-          if(!selected.has(i)) remaining.push(i);
-        }
-        const need = minPoints - selected.size;
-        if(need > 0 && remaining.length > 0){
-          const step = remaining.length / (need + 1);
-          for(let j=1; j<=need; j++){
-            const idx = remaining[Math.min(remaining.length-1, Math.round(j*step))];
-            if(idx !== undefined) selected.add(idx);
+      // ステップ2: 必須点を強制追加（均等サンプリングで漏れた場合のため）
+      mandatory.forEach(idx => selected.add(idx));
+      
+      // ステップ3: 局所ピークを優先候補として追加（近傍に既存点がない場合）
+      const selectedArray = Array.from(selected).sort((a,b)=>a-b);
+      const minPeakSpacing = totalLength / (targetPoints * 2);
+      
+      const peakCandidates = [];
+      for(const peakIdx of localPeaks){
+        if(selected.has(peakIdx)) continue;
+        
+        const peakArc = arcLengths[peakIdx];
+        let tooClose = false;
+        for(const selIdx of selectedArray){
+          const selArc = arcLengths[selIdx];
+          if(Math.abs(peakArc - selArc) < minPeakSpacing){
+            tooClose = true;
+            break;
           }
+        }
+        if(!tooClose){
+          const peakLoad = Math.abs(pts[peakIdx].y);
+          peakCandidates.push({idx: peakIdx, load: peakLoad});
         }
       }
       
-      // 目標点数を超えた場合、必須点以外から削減（弧長間隔が最小のものから）
-      if(selected.size > maxPoints){
-        const selectedArray = Array.from(selected).sort((a,b)=>a-b);
-        const canRemove = [];
-        
-        // 削除候補（必須でない点）の弧長間隔を計算
-        for(let i=1; i<selectedArray.length; i++){
-          const idx = selectedArray[i];
-          if(!mandatory.has(idx)){
-            const prevIdx = selectedArray[i-1];
-            const interval = arcLengths[idx] - arcLengths[prevIdx];
-            canRemove.push({idx, interval});
-          }
-        }
-        
-        // 間隔が小さい順にソート
-        canRemove.sort((a,b) => a.interval - b.interval);
-        
-        // 削除
-        const toRemove = selected.size - maxPoints;
-        for(let i=0; i<toRemove && i<canRemove.length; i++){
-          selected.delete(canRemove[i].idx);
-        }
+      // 荷重の大きい順にソート
+      peakCandidates.sort((a,b) => b.load - a.load);
+      
+      // ピークを追加（目標点数の10%程度まで）
+      const maxPeaksToAdd = Math.floor(targetPoints * 0.1);
+      for(let i=0; i<Math.min(maxPeaksToAdd, peakCandidates.length); i++){
+        selected.add(peakCandidates[i].idx);
       }
 
       const indices = Array.from(selected).sort((a,b)=>a-b);
