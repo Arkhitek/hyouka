@@ -1401,30 +1401,30 @@
       
       // 間引き率に応じた目標点数を計算
       // thinningRateValue: 0(無し) → 100(最大)
-      // 目標点数: 元の点数 → 20点
+      // 目標点数: 元の点数 → 10点
       let targetPoints;
       if(thinningRateValue >= 100){
-        // 最大間引き: 20点
-        targetPoints = 20;
+        // 最大間引き: 10点
+        targetPoints = 10;
       } else {
-        // 線形補間: rate=0で元の点数、rate=100で20点
-        const minPoints = 20;
+        // 線形補間: rate=0で元の点数、rate=100で10点
+        const minPoints = 10;
         const maxPoints = envelope.length;
         // rate=50でデフォルト動作（√(元の点数) * 3.5）
-        const defaultPoints = Math.max(20, Math.min(100, Math.round(Math.sqrt(envelope.length) * 3.5)));
+        const defaultPoints = Math.max(10, Math.min(100, Math.round(Math.sqrt(envelope.length) * 3.5)));
         
         if(thinningRateValue <= 50){
           // 0-50: 元の点数 → デフォルト点数
           const t = thinningRateValue / 50.0;
           targetPoints = Math.round(maxPoints - t * (maxPoints - defaultPoints));
         } else {
-          // 50-100: デフォルト点数 → 20点
+          // 50-100: デフォルト点数 → 10点
           const t = (thinningRateValue - 50) / 50.0;
           targetPoints = Math.round(defaultPoints - t * (defaultPoints - minPoints));
         }
       }
       
-      targetPoints = Math.max(20, Math.min(envelope.length, targetPoints));
+      targetPoints = Math.max(10, Math.min(envelope.length, targetPoints));
       
       // 既に目標点数以下の場合は間引き不要
       if(envelope.length <= targetPoints){
