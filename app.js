@@ -1431,60 +1431,121 @@
         return envelope.map(pt=>({...pt}));
       }
       
-      // ステップ1: 均等な弧長間隔でサンプリング
-      const selected = new Set(mandatory); // 必須点は最初に選択
+      // ステップ1: 全体を均等な弧長間隔でサンプリング（必須点は後で追加）
+      const selected = new Set();
       const uniformInterval = totalLength / (targetPoints - 1);
       
+      // 先頭と末尾は必ず含める
+      selected.add(0);
+      selected.add(pts.length - 1);
+      
+      // 均等間隔で点を選択
       for(let j=1; j<targetPoints-1; j++){
         const targetArc = j * uniformInterval;
         // targetArcに最も近いインデックスを探す
         let bestIdx = -1;
         let bestDiff = Infinity;
-        for(let k=0; k<arcLengths.length; k++){
+        for(let k=1; k<pts.length-1; k++){
           const diff = Math.abs(arcLengths[k] - targetArc);
           if(diff < bestDiff){
             bestDiff = diff;
             bestIdx = k;
           }
         }
-        if(bestIdx >= 0 && bestIdx < pts.length){
+        if(bestIdx >= 0){
           selected.add(bestIdx);
         }
       }
       
-      // ステップ2: 必須点を強制追加（均等サンプリングで漏れた場合のため）
-      mandatory.forEach(idx => selected.add(idx));
+      // ステップ2: 必須点を強制追加（必須点は保持する必要があるため）
+      // ただし、必須点を追加する際に、近くに既存点がある場合は置き換える
+      const criticalMandatory = new Set([0, pts.length-1, idxPmax]);
       
-      // ステップ3: 局所ピークを優先候補として追加（近傍に既存点がない場合）
-      const selectedArray = Array.from(selected).sort((a,b)=>a-b);
-      const minPeakSpacing = totalLength / (targetPoints * 2);
-      
-      const peakCandidates = [];
-      for(const peakIdx of localPeaks){
-        if(selected.has(peakIdx)) continue;
+      for(const mandIdx of mandatory){
+        if(selected.has(mandIdx)){
+          continue; // 既に選択済み
+        }
         
-        const peakArc = arcLengths[peakIdx];
-        let tooClose = false;
-        for(const selIdx of selectedArray){
-          const selArc = arcLengths[selIdx];
-          if(Math.abs(peakArc - selArc) < minPeakSpacing){
-            tooClose = true;
-            break;
+        // この必須点に最も近い既存選択点を探す
+        const mandArc = arcLengths[mandIdx];
+        let closestSelectedIdx = -1;
+        let closestDist = Infinity;
+        
+        for(const selIdx of selected){
+          if(criticalMandatory.has(selIdx)){
+            continue; // 重要な必須点は置き換えない
+          }
+          const dist = Math.abs(arcLengths[selIdx] - mandArc);
+          if(dist < closestDist){
+            closestDist = dist;
+            closestSelectedIdx = selIdx;
           }
         }
-        if(!tooClose){
-          const peakLoad = Math.abs(pts[peakIdx].y);
-          peakCandidates.push({idx: peakIdx, load: peakLoad});
+        
+        // 近い点がある場合は置き換え、ない場合は追加
+        const replaceThreshold = totalLength / (targetPoints * 3);
+        if(closestSelectedIdx >= 0 && closestDist < replaceThreshold){
+          selected.delete(closestSelectedIdx);
+          selected.add(mandIdx);
+        } else {
+          selected.add(mandIdx);
         }
       }
       
-      // 荷重の大きい順にソート
-      peakCandidates.sort((a,b) => b.load - a.load);
+      // ステップ3: 目標点数を大幅に超えた場合は削減
+      if(selected.size > targetPoints * 1.2){
+        const selectedArray = Array.from(selected).sort((a,b)=>a-b);
+        const canRemove = [];
+        
+        for(let i=1; i<selectedArray.length; i++){
+          const idx = selectedArray[i];
+          if(!mandatory.has(idx)){
+            const prevIdx = selectedArray[i-1];
+            const interval = arcLengths[idx] - arcLengths[prevIdx];
+            canRemove.push({idx, interval});
+          }
+        }
+        
+        canRemove.sort((a,b) => a.interval - b.interval);
+        
+        const toRemove = Math.floor(selected.size - targetPoints);
+        for(let i=0; i<toRemove && i<canRemove.length; i++){
+          selected.delete(canRemove[i].idx);
+        }
+      }
       
-      // ピークを追加（目標点数の10%程度まで）
-      const maxPeaksToAdd = Math.floor(targetPoints * 0.1);
-      for(let i=0; i<Math.min(maxPeaksToAdd, peakCandidates.length); i++){
-        selected.add(peakCandidates[i].idx);
+      // ステップ4: 局所ピークを優先候補として追加（点数に余裕がある場合のみ）
+      if(selected.size < targetPoints){
+        const selectedArray = Array.from(selected).sort((a,b)=>a-b);
+        const minPeakSpacing = totalLength / (targetPoints * 2);
+        
+        const peakCandidates = [];
+        for(const peakIdx of localPeaks){
+          if(selected.has(peakIdx)) continue;
+          
+          const peakArc = arcLengths[peakIdx];
+          let tooClose = false;
+          for(const selIdx of selectedArray){
+            const selArc = arcLengths[selIdx];
+            if(Math.abs(peakArc - selArc) < minPeakSpacing){
+              tooClose = true;
+              break;
+            }
+          }
+          if(!tooClose){
+            const peakLoad = Math.abs(pts[peakIdx].y);
+            peakCandidates.push({idx: peakIdx, load: peakLoad});
+          }
+        }
+        
+        // 荷重の大きい順にソート
+        peakCandidates.sort((a,b) => b.load - a.load);
+        
+        // ピークを追加（余剰分のみ）
+        const spacesAvailable = targetPoints - selected.size;
+        for(let i=0; i<Math.min(spacesAvailable, peakCandidates.length); i++){
+          selected.add(peakCandidates[i].idx);
+        }
       }
 
       const indices = Array.from(selected).sort((a,b)=>a-b);
