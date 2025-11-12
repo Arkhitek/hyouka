@@ -53,7 +53,7 @@
   const redoButton = document.getElementById('redoButton');
   const openPointEditButton = null; // ボタンは廃止
 
-  // --- Plot resize & aspect-ratio handles ---
+  // --- Plot height resize handle (width is fixed) ---
   (function(){
     if(!plotDiv) return;
     // ensure container is relatively positioned
@@ -61,16 +61,11 @@
 
     const resizeHandle = document.createElement('div');
     resizeHandle.className = 'resize-handle';
-    resizeHandle.title = 'ドラッグでグラフの高さをリサイズ';
-
-    const aspectHandle = document.createElement('div');
-    aspectHandle.className = 'aspect-handle';
-    aspectHandle.title = 'ドラッグで縦横比を調整';
+    resizeHandle.title = 'ドラッグでグラフの高さを調整';
 
     plotDiv.appendChild(resizeHandle);
-    plotDiv.appendChild(aspectHandle);
 
-    // Resize plot height only (width is fixed to 100%)
+    // Resize height only (width is fixed to match other boxes)
     let resizing = false, rStartY = 0, rStartH = 0;
     resizeHandle.addEventListener('mousedown', (ev) => {
       ev.preventDefault(); 
@@ -84,11 +79,7 @@
       const dy = ev.clientY - rStartY;
       const newH = Math.max(150, Math.round(rStartH + dy));
       plotDiv.style.height = newH + 'px';
-      try{ 
-        Plotly.relayout(plotDiv, {height: newH}); 
-      }catch(_){ 
-        try{ Plotly.Plots.resize(plotDiv); }catch(_){}
-      }
+      try{ Plotly.relayout(plotDiv, {height: newH}); }catch(_){ try{ Plotly.Plots.resize(plotDiv); }catch(_){}}
     });
     window.addEventListener('mouseup', ()=>{ 
       if(resizing){ 
@@ -97,39 +88,11 @@
       } 
     });
 
-    // Aspect ratio adjust (drag horizontally)
-    let adjusting = false, aStartX = 0, aStartRatio = 1;
-    aspectHandle.addEventListener('mousedown', (ev) => {
-      ev.preventDefault(); adjusting = true; aStartX = ev.clientX; document.body.style.cursor = 'ew-resize';
-      // try to read current scaleratio
-      try{
-        const layout = plotDiv._fullLayout || (plotDiv.layout ? plotDiv.layout : null);
-        if(layout && layout.yaxis && Number.isFinite(layout.yaxis.scaleratio)) aStartRatio = layout.yaxis.scaleratio;
-        else aStartRatio = 1;
-      }catch(_){ aStartRatio = 1; }
-    });
-    window.addEventListener('mousemove', (ev) => {
-      if(!adjusting) return;
-      const dx = ev.clientX - aStartX;
-      // change ratio exponentially for smooth control
-      const factor = Math.exp(dx / 250); // dx of ~+/-250 results in factor ~e
-      let newRatio = aStartRatio * factor;
-      newRatio = Math.max(0.2, Math.min(10, newRatio));
-      try{ Plotly.relayout(plotDiv, {'yaxis.scaleanchor':'x', 'yaxis.scaleratio': newRatio}); }catch(_){ }
-    });
-    window.addEventListener('mouseup', ()=>{ if(adjusting){ adjusting=false; document.body.style.cursor=''; } });
-
-    // double-click to reset aspect ratio and height
-    aspectHandle.addEventListener('dblclick', (ev) => {
-      ev.preventDefault(); try{ Plotly.relayout(plotDiv, {'yaxis.scaleanchor': null, 'yaxis.scaleratio': null}); }catch(_){ }
-    });
+    // double-click to reset height
     resizeHandle.addEventListener('dblclick', (ev) => {
       ev.preventDefault(); 
       plotDiv.style.height = ''; 
-      try{ 
-        Plotly.relayout(plotDiv, {height: null}); 
-        Plotly.Plots.resize(plotDiv);
-      }catch(_){}
+      try{ Plotly.relayout(plotDiv, {height: null}); Plotly.Plots.resize(plotDiv);}catch(_){}
     });
   })();
   const pointEditDialog = document.getElementById('pointEditDialog');
