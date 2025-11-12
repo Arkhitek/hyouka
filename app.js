@@ -52,6 +52,69 @@
   const undoButton = document.getElementById('undoButton');
   const redoButton = document.getElementById('redoButton');
   const openPointEditButton = null; // ボタンは廃止
+
+  // --- Plot resize & aspect-ratio handles ---
+  (function(){
+    if(!plotDiv) return;
+    // ensure container is relatively positioned
+    if(getComputedStyle(plotDiv).position === 'static') plotDiv.style.position = 'relative';
+
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'resize-handle';
+    resizeHandle.title = 'ドラッグでグラフ領域をリサイズ';
+
+    const aspectHandle = document.createElement('div');
+    aspectHandle.className = 'aspect-handle';
+    aspectHandle.title = 'ドラッグで縦横比を調整';
+
+    plotDiv.appendChild(resizeHandle);
+    plotDiv.appendChild(aspectHandle);
+
+    // Resize overall plot container
+    let resizing = false, rStartX = 0, rStartY = 0, rStartW = 0, rStartH = 0;
+    resizeHandle.addEventListener('mousedown', (ev) => {
+      ev.preventDefault(); resizing = true; rStartX = ev.clientX; rStartY = ev.clientY; rStartW = plotDiv.clientWidth; rStartH = plotDiv.clientHeight; document.body.style.cursor = 'nwse-resize';
+    });
+    window.addEventListener('mousemove', (ev) => {
+      if(!resizing) return;
+      const dx = ev.clientX - rStartX; const dy = ev.clientY - rStartY;
+      const newW = Math.max(200, Math.round(rStartW + dx));
+      const newH = Math.max(150, Math.round(rStartH + dy));
+      plotDiv.style.width = newW + 'px'; plotDiv.style.height = newH + 'px';
+      try{ Plotly.relayout(plotDiv, {width: newW, height: newH}); }catch(_){ try{ Plotly.Plots.resize(plotDiv); }catch(_){}}
+    });
+    window.addEventListener('mouseup', ()=>{ if(resizing){ resizing = false; document.body.style.cursor = ''; } });
+
+    // Aspect ratio adjust (drag horizontally)
+    let adjusting = false, aStartX = 0, aStartRatio = 1;
+    aspectHandle.addEventListener('mousedown', (ev) => {
+      ev.preventDefault(); adjusting = true; aStartX = ev.clientX; document.body.style.cursor = 'ew-resize';
+      // try to read current scaleratio
+      try{
+        const layout = plotDiv._fullLayout || (plotDiv.layout ? plotDiv.layout : null);
+        if(layout && layout.yaxis && Number.isFinite(layout.yaxis.scaleratio)) aStartRatio = layout.yaxis.scaleratio;
+        else aStartRatio = 1;
+      }catch(_){ aStartRatio = 1; }
+    });
+    window.addEventListener('mousemove', (ev) => {
+      if(!adjusting) return;
+      const dx = ev.clientX - aStartX;
+      // change ratio exponentially for smooth control
+      const factor = Math.exp(dx / 250); // dx of ~+/-250 results in factor ~e
+      let newRatio = aStartRatio * factor;
+      newRatio = Math.max(0.2, Math.min(10, newRatio));
+      try{ Plotly.relayout(plotDiv, {'yaxis.scaleanchor':'x', 'yaxis.scaleratio': newRatio}); }catch(_){ }
+    });
+    window.addEventListener('mouseup', ()=>{ if(adjusting){ adjusting=false; document.body.style.cursor=''; } });
+
+    // double-click to reset aspect ratio and size
+    aspectHandle.addEventListener('dblclick', (ev) => {
+      ev.preventDefault(); try{ Plotly.relayout(plotDiv, {'yaxis.scaleanchor': null, 'yaxis.scaleratio': null}); }catch(_){ }
+    });
+    resizeHandle.addEventListener('dblclick', (ev) => {
+      ev.preventDefault(); plotDiv.style.width = ''; plotDiv.style.height = ''; try{ Plotly.relayout(plotDiv, {width: null, height: null}); Plotly.Plots.resize(plotDiv);}catch(_){}
+    });
+  })();
   const pointEditDialog = document.getElementById('pointEditDialog');
   const editGammaInput = document.getElementById('edit_gamma');
   const editLoadInput = document.getElementById('edit_load');
