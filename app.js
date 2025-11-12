@@ -11,6 +11,8 @@
   let envelopeEdited = false;
   // 最後に生成した包絡線の正負側（side）を記録。side変更時は再生成を強制。
   let lastEnvelopeSide = null;
+  // Excelからインポートが行われたか（間引き編集可否判定用）
+  let importedFromExcel = false;
   let header = [];
   let envelopeData = null;
   let analysisResults = {};
@@ -59,6 +61,7 @@
   const toggleBoxSelectModeButton = document.getElementById('toggleBoxSelectMode');
   const prevPointButton = document.getElementById('prevPointButton');
   const nextPointButton = document.getElementById('nextPointButton');
+  const resetEnvelopeButton = document.getElementById('resetEnvelopeButton');
 
   // ドラッグモードの状態（グローバル変数）
   let isDragModeEnabled = false;
@@ -681,11 +684,24 @@
     
     updateThinningDisplay(thinning_rate.value);
     
+    // previous value for revert if editing is blocked
+    let previousThinningValue = parseInt(thinning_rate.value, 10) || 0;
     thinning_rate.addEventListener('input', (e) => {
       updateThinningDisplay(e.target.value);
     });
     
-    thinning_rate.addEventListener('change', () => {
+    thinning_rate.addEventListener('change', (e) => {
+      const newVal = parseInt(thinning_rate.value, 10) || 0;
+      // 間引き編集が許可されない状態かチェック
+      if(envelopeEdited || importedFromExcel){
+        // ユーザーへ警告し、スライダーを元に戻す
+        alert('注意: 包絡線を手動で編集した後、またはExcelからインポートした後は、間引き率の自動編集は無効です。\n間引きを行うには、まず編集を破棄するかデータをクリアしてください。');
+        thinning_rate.value = previousThinningValue;
+        updateThinningDisplay(previousThinningValue);
+        return;
+      }
+      // 許可されている場合は新しい値を保存して再実行
+      previousThinningValue = newVal;
       if(rawData && rawData.length>=3){
         scheduleAutoRun();
       }
@@ -708,12 +724,41 @@
     importExcelInput.addEventListener('change', handleImportExcelChange);
   }
 
+  // 包絡線リセットボタン: 手動編集やインポート履歴を破棄して試験データから再生成
+  if(resetEnvelopeButton){
+    resetEnvelopeButton.addEventListener('click', function(){
+      if(!rawData || rawData.length < 3){
+        alert('試験データが不足しています。まず γ と P の入力またはインポートを行ってください。');
+        return;
+      }
+      if(!confirm('包絡線の手動編集およびインポート履歴を破棄して、試験データから包絡線を再生成します。よろしいですか？')){
+        return;
+      }
+      // リセット処理
+      envelopeEdited = false;
+      importedFromExcel = false;
+      window._selectedEnvelopePoint = -1;
+      historyStack = [];
+      redoStack = [];
+      updateHistoryButtons();
+      // 再生成（processDataDirect 内で envelopeEdited を false にして生成される）
+      try{
+        processDataDirect();
+        appendLog('包絡線を試験データからリセットしました');
+      }catch(err){
+        console.warn('包絡線リセット時のエラー', err);
+        alert('包絡線の再生成に失敗しました。コンソールを確認してください。');
+      }
+    });
+  }
+
   function clearInputData(){
     gammaInput.value = '';
     loadInput.value = '';
   rawData = [];
   envelopeData = null;
   envelopeEdited = false;
+  importedFromExcel = false;
   lastEnvelopeSide = null;
     analysisResults = {};
     
@@ -3535,6 +3580,11 @@
       window._selectedEnvelopePoint = -1; // 選択解除
       envelopeEdited = true;
       lastEnvelopeSide = envelope_side ? envelope_side.value : null;
+    }
+
+    // インポートが正常に行われたフラグを立てる（間引き編集の可否判定に使用）
+    if(importedData.length || importedEnvelope.length){
+      importedFromExcel = true;
     }
 
     // 再解析・プロット更新
