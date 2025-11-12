@@ -61,7 +61,7 @@
 
     const resizeHandle = document.createElement('div');
     resizeHandle.className = 'resize-handle';
-    resizeHandle.title = 'ドラッグでグラフ領域をリサイズ';
+    resizeHandle.title = 'ドラッグでグラフの高さをリサイズ';
 
     const aspectHandle = document.createElement('div');
     aspectHandle.className = 'aspect-handle';
@@ -70,20 +70,32 @@
     plotDiv.appendChild(resizeHandle);
     plotDiv.appendChild(aspectHandle);
 
-    // Resize overall plot container
-    let resizing = false, rStartX = 0, rStartY = 0, rStartW = 0, rStartH = 0;
+    // Resize plot height only (width is fixed to 100%)
+    let resizing = false, rStartY = 0, rStartH = 0;
     resizeHandle.addEventListener('mousedown', (ev) => {
-      ev.preventDefault(); resizing = true; rStartX = ev.clientX; rStartY = ev.clientY; rStartW = plotDiv.clientWidth; rStartH = plotDiv.clientHeight; document.body.style.cursor = 'nwse-resize';
+      ev.preventDefault(); 
+      resizing = true; 
+      rStartY = ev.clientY; 
+      rStartH = plotDiv.clientHeight; 
+      document.body.style.cursor = 'ns-resize';
     });
     window.addEventListener('mousemove', (ev) => {
       if(!resizing) return;
-      const dx = ev.clientX - rStartX; const dy = ev.clientY - rStartY;
-      const newW = Math.max(200, Math.round(rStartW + dx));
+      const dy = ev.clientY - rStartY;
       const newH = Math.max(150, Math.round(rStartH + dy));
-      plotDiv.style.width = newW + 'px'; plotDiv.style.height = newH + 'px';
-      try{ Plotly.relayout(plotDiv, {width: newW, height: newH}); }catch(_){ try{ Plotly.Plots.resize(plotDiv); }catch(_){}}
+      plotDiv.style.height = newH + 'px';
+      try{ 
+        Plotly.relayout(plotDiv, {height: newH}); 
+      }catch(_){ 
+        try{ Plotly.Plots.resize(plotDiv); }catch(_){}
+      }
     });
-    window.addEventListener('mouseup', ()=>{ if(resizing){ resizing = false; document.body.style.cursor = ''; } });
+    window.addEventListener('mouseup', ()=>{ 
+      if(resizing){ 
+        resizing = false; 
+        document.body.style.cursor = ''; 
+      } 
+    });
 
     // Aspect ratio adjust (drag horizontally)
     let adjusting = false, aStartX = 0, aStartRatio = 1;
@@ -107,12 +119,17 @@
     });
     window.addEventListener('mouseup', ()=>{ if(adjusting){ adjusting=false; document.body.style.cursor=''; } });
 
-    // double-click to reset aspect ratio and size
+    // double-click to reset aspect ratio and height
     aspectHandle.addEventListener('dblclick', (ev) => {
       ev.preventDefault(); try{ Plotly.relayout(plotDiv, {'yaxis.scaleanchor': null, 'yaxis.scaleratio': null}); }catch(_){ }
     });
     resizeHandle.addEventListener('dblclick', (ev) => {
-      ev.preventDefault(); plotDiv.style.width = ''; plotDiv.style.height = ''; try{ Plotly.relayout(plotDiv, {width: null, height: null}); Plotly.Plots.resize(plotDiv);}catch(_){}
+      ev.preventDefault(); 
+      plotDiv.style.height = ''; 
+      try{ 
+        Plotly.relayout(plotDiv, {height: null}); 
+        Plotly.Plots.resize(plotDiv);
+      }catch(_){}
     });
   })();
   const pointEditDialog = document.getElementById('pointEditDialog');

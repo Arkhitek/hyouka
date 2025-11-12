@@ -33,18 +33,19 @@
     })();
   </script>
   <style>
-    /* グラフリサイズハンドル */
+    /* グラフリサイズハンドル（高さのみ） */
     .resize-handle{
       position: absolute;
-      right: 6px;
+      left: 50%;
+      transform: translateX(-50%);
       bottom: 6px;
-      width: 18px;
+      width: 60px;
       height: 18px;
-      background: linear-gradient(135deg, rgba(0,0,0,0.25) 25%, transparent 25%), linear-gradient(225deg, rgba(0,0,0,0.25) 25%, transparent 25%);
-      background-size: 6px 6px;
+      background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.25) 40%, rgba(0,0,0,0.25) 60%, transparent 60%);
+      background-size: 100% 6px;
       background-position: center;
       border-radius: 3px;
-      cursor: nwse-resize;
+      cursor: ns-resize;
       z-index: 9999;
       opacity: 0.9;
     }
@@ -66,8 +67,8 @@
       font-size: 12px;
     }
     .aspect-handle::after{ content: "比"; }
-    /* プロット領域は相対配置を想定 */
-    #plot{ position: relative; }
+    /* プロット領域は相対配置、横幅100% */
+    #plot{ position: relative; width: 100%; }
   </style>
 </head>
 <body>
