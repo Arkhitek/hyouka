@@ -2773,6 +2773,8 @@
           selectedPointIndex = -1;
           window._selectedEnvelopePoint = -1;
           recalculateFromEnvelope(editableEnvelope);
+          // 閉じる: ポップアップの削除ボタンと同様の挙動にする
+          closePointEditDialog();
           return;
         }
         // Box/Lasso selectで複数選択がある場合（従来の処理）
@@ -2796,6 +2798,8 @@
           selectedPointIndex = -1;
           window._selectedEnvelopePoint = -1;
           recalculateFromEnvelope(editableEnvelope);
+          // 閉じる: ポップアップの削除ボタンと同様の挙動にする
+          closePointEditDialog();
           return;
         }
         // 単一点選択の場合（既存の動作）
@@ -2803,6 +2807,8 @@
           deleteEnvelopePoint(selectedPointIndex, editableEnvelope);
           selectedPointIndex = -1;
           window._selectedEnvelopePoint = -1;
+          // 閉じる: 単一点削除でもダイアログを閉じる
+          closePointEditDialog();
         }
         return;
       }
