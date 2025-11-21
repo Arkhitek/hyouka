@@ -1795,7 +1795,7 @@
     results.lineIII = Py_result.lineIII;
 
   // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
-  const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max, null, forcedPyLineV);
+  const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max, null, null);
   Object.assign(results, Pu_result);
 
     // Override Pmax with value BEFORE ultimate displacement δu per user requirement
