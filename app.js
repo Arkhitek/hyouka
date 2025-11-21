@@ -431,7 +431,6 @@
   }
   
   // キャンセルボタンのハンドラは openPointEditDialog 内で動的に設定されるため、ここでは不要
-  
   // 削除ボタン
   const deletePointEditButton = document.getElementById('deletePointEdit');
   if(deletePointEditButton){
@@ -3159,10 +3158,10 @@
       const p1 = editableEnvelope[i];
       const p2 = editableEnvelope[i + 1];
       
-  const x1 = xaxis.l2p(p1.gamma);
-  const y1 = yaxis.l2p(p1.Load);
-  const x2 = xaxis.l2p(p2.gamma);
-  const y2 = yaxis.l2p(p2.Load);
+      const x1 = xaxis.l2p(p1.gamma);
+      const y1 = yaxis.l2p(p1.Load);
+      const x2 = xaxis.l2p(p2.gamma);
+      const y2 = yaxis.l2p(p2.Load);
       
       // 線分への最短距離を計算
       const dist = pointToSegmentDistance(clickX, clickY, x1, y1, x2, y2);
@@ -3452,7 +3451,6 @@
       const r = analysisResults;
       wsSummary.addRow(['項目','値','単位']);
       wsSummary.addRow(['試験体名称', specimen, '']);
-      const Lval2 = parseFloat(wall_length_m.value);
       const rows = [
         ['最大耐力 Pmax', r.Pmax, 'kN'],
         ['降伏耐力 Py', r.Py, 'kN'],
