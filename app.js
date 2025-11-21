@@ -1795,7 +1795,7 @@
     results.lineIII = Py_result.lineIII;
 
   // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
-  const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max, null, forcedPyLineV);
+  const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max);
   Object.assign(results, Pu_result);
 
     // Override Pmax with value BEFORE ultimate displacement δu per user requirement
@@ -1837,7 +1837,7 @@
 
           // Recompute Pu/μ/δv/δu with updated Py
           // 注意: 面積Sを正しくδuまで補間するため、積分対象は元の full envelope を渡す
-          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1, forcedPyLineV);
+          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1);
           Object.assign(results, Pu_pre);
 
           // Recompute Pmax with final δu restriction
@@ -1898,6 +1898,8 @@
 
     return results;
   }
+
+  // === Py Calculation (Line Method - Section III.1) ===
   function calculatePy_LineMethod(envelope, Pmax){
     const p_max = Pmax;
 
@@ -2021,7 +2023,7 @@
   }
 
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
-  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u, forcedPyLineV){
+  function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u){
     // δy は包絡線とLineIV(Py水平線)の交点の変形角
     // 包絡線上で |Load| が Py に最も近い点、または線形補間でPyを横切る点のγ
     let delta_y = 0;
