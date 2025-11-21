@@ -2399,12 +2399,12 @@
     };
 
     // (d) 特定変形時耐力 γ=1/○○rad のP値を示す水平線
-    if (p0_d != null && gamma_specific != null) {
+    if (p0_d != null && results.gamma_specific != null) {
       const trace_p0d = {
         x: [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma))) * envelopeSign],
         y: [p0_d * envelopeSign, p0_d * envelopeSign],
         mode: 'lines',
-        name: `特定変形時耐力 γ=1/${(1/gamma_specific).toFixed(0)}rad`,
+        name: `特定変形時耐力 γ=1/${(1/results.gamma_specific).toFixed(0)}rad`,
         line: {color: 'magenta', width: 2, dash: 'dot'}
       };
       traces.push(trace_p0d);
