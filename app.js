@@ -2394,7 +2394,7 @@
       x: [lineVI.gamma_start * envelopeSign, lineVI.gamma_end * envelopeSign],
       y: [lineVI.Load * envelopeSign, lineVI.Load * envelopeSign],
       mode: 'lines',
-        if (typeof p0_d !== 'undefined' && typeof gamma_specific !== 'undefined') {
+        if (p0_d != null && gamma_specific != null) {
           const trace_p0d = {
             x: [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma))) * envelopeSign],
             y: [p0_d * envelopeSign, p0_d * envelopeSign],
