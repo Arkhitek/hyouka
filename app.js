@@ -1880,6 +1880,7 @@
             results.delta_y = gamma_04pmax;
             // 強制時は原点とこの点を結ぶ直線をlineVとして以降の計算・描画に使用
             forcedPyLineV = { start: { gamma: 0, Load: 0 }, end: { gamma: gamma_04pmax, Load: 0.4 * pmax } };
+            results.forcedPyLineV = forcedPyLineV;
           }
         }
       }
@@ -2107,10 +2108,10 @@
 
     // Lines for visualization
     let lineV, lineVI;
-    // Py強制時は原点～Py/δyの直線を使用
-    if (typeof forcedPyLineV !== 'undefined' && forcedPyLineV) {
-      lineV = forcedPyLineV;
-      lineVI = { gamma_start: forcedPyLineV.end.gamma, gamma_end: delta_u, Load: forcedPyLineV.end.Load };
+    // results.forcedPyLineVがあればそれを優先
+    if (results && results.forcedPyLineV) {
+      lineV = results.forcedPyLineV;
+      lineVI = { gamma_start: results.forcedPyLineV.end.gamma, gamma_end: delta_u, Load: results.forcedPyLineV.end.Load };
     } else {
       lineV = { start: { gamma: 0, Load: 0 }, end: { gamma: delta_v, Load: Pu } };
       lineVI = { gamma_start: delta_v, gamma_end: delta_u, Load: Pu };
