@@ -1774,55 +1774,6 @@
 
   // === JTCCM Metrics Calculation (Sections III, IV, V) ===
   function calculateJTCCMMetrics(envelope, gamma_specific, delta_u_max, L, alpha, c0){
-      // 強制モードフラグ（グローバル変数として宣言・制御可）
-      const forcePyTo04Pmax = window.forcePyTo04Pmax === true;
-        // --- 強制モード: Py・δyを0.4Pmaxに設定し、Line Vを原点～(δy,Py)で生成 ---
-        if(forcePyTo04Pmax){
-          // Pmax算出
-          let pmax = 0;
-          let gamma_04pmax = null;
-          for(let i=0;i<envelope.length;i++){
-            const absLoad = Math.abs(envelope[i].Load);
-            if(absLoad > pmax) pmax = absLoad;
-          }
-          // 0.4Pmaxのγを包絡線上から線形補間で取得
-          for(let i=1;i<envelope.length;i++){
-            const prev = envelope[i-1], curr = envelope[i];
-            const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
-            if((prevLoad <= 0.4*pmax && currLoad >= 0.4*pmax) || (prevLoad >= 0.4*pmax && currLoad <= 0.4*pmax)){
-              const t = (0.4*pmax - prevLoad) / (currLoad - prevLoad);
-              gamma_04pmax = prev.gamma + t * (curr.gamma - prev.gamma);
-              break;
-            }
-          }
-          if(gamma_04pmax === null){
-            // フォールバック: 最後の点
-            gamma_04pmax = envelope[envelope.length-1].gamma;
-          }
-          results.Pmax = pmax;
-          results.Py = 0.4 * pmax;
-          results.Py_gamma = gamma_04pmax;
-          results.delta_y = gamma_04pmax;
-          // Line V: 原点～(δy,Py)
-          results.lineV = {start:{gamma:0,Load:0}, end:{gamma:gamma_04pmax,Load:0.4*pmax}};
-          // 剛性K
-          results.K = results.Py / results.delta_y;
-          // δu, δv, Pu, μ等はLine V基準で再計算
-          results.delta_u = delta_u_max;
-          results.delta_v = results.Py / results.K;
-          results.Pu = results.Py; // Pu=Pyとする（Line V上）
-          results.mu = results.delta_u / results.delta_v;
-          // 面積S（Line V下の台形面積）
-          results.S = 0.5 * results.Py * results.delta_y;
-          // その他の値は既存ロジックで
-          // P0, Pa, magnification等
-          const P0_result = calculateP0(results, envelope, gamma_specific, c0);
-          Object.assign(results, P0_result);
-          results.Pa = results.P0 * alpha;
-          results.magnification = results.Pa / (L * 1.96);
-          results.magnification_rounded = Math.floor(results.magnification * 10) / 10;
-          return results;
-        }
     const results = {};
 
     // Store gamma_specific for later use in rendering
@@ -1905,6 +1856,7 @@
     }
 
     // --- Pyが0.4Pmax～0.9Pmaxの範囲外なら0.4Pmaxの包絡線上の点をPy/δyとする ---
+    let forcedPyLineV = null;
     try {
       const pmax = results.Pmax;
       const py = results.Py;
@@ -1926,7 +1878,8 @@
             results.Py = 0.4 * pmax;
             results.Py_gamma = gamma_04pmax;
             results.delta_y = gamma_04pmax;
-            // 必要なら他の関連値も更新
+            // 強制時は原点とこの点を結ぶ直線をlineVとして以降の計算・描画に使用
+            forcedPyLineV = { start: { gamma: 0, Load: 0 }, end: { gamma: gamma_04pmax, Load: 0.4 * pmax } };
           }
         }
       }
@@ -2153,8 +2106,15 @@
     const mu = delta_u / delta_v;
 
     // Lines for visualization
-    const lineV = {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
-    const lineVI = {gamma_start: delta_v, gamma_end: delta_u, Load: Pu};
+    let lineV, lineVI;
+    // Py強制時は原点～Py/δyの直線を使用
+    if (typeof forcedPyLineV !== 'undefined' && forcedPyLineV) {
+      lineV = forcedPyLineV;
+      lineVI = { gamma_start: forcedPyLineV.end.gamma, gamma_end: delta_u, Load: forcedPyLineV.end.Load };
+    } else {
+      lineV = { start: { gamma: 0, Load: 0 }, end: { gamma: delta_v, Load: Pu } };
+      lineVI = { gamma_start: delta_v, gamma_end: delta_u, Load: Pu };
+    }
 
     return { delta_y, K, delta_u, S, Pu, delta_v, mu, lineV, lineVI, load_at_delta_u };
   }

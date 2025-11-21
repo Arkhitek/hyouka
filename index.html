@@ -108,9 +108,6 @@
 
   <div id="controls" class="card">
     <h2>1. 試験データの入力</h2>
-    <div class="control-group">
-      <label><input type="checkbox" id="forcePyTo04Pmax"> Py・δyを0.4Pmaxに強制（Line V直線モード）</label>
-    </div>
     <div class="row">
       <div class="control-group">
   <label for="wall_preset">対象耐力壁</label>
@@ -326,17 +323,6 @@
   </div>
 
   <script src="app.js"></script>
-    <script>
-      // Py・δy強制モード切替
-      const forcePyCheckbox = document.getElementById('forcePyTo04Pmax');
-      window.forcePyTo04Pmax = false;
-      if(forcePyCheckbox){
-        forcePyCheckbox.addEventListener('change', function(){
-          window.forcePyTo04Pmax = this.checked;
-          try{ if(window.processDataDirect) processDataDirect(); }catch(e){ console.warn('Py強制再計算エラー',e); }
-        });
-      }
-    </script>
   <script>
     // 設定: 必要に応じてPNGロゴとExcelテンプレートの使用を切替（デフォルトはどちらもfalse）
     window.APP_CONFIG = Object.assign({
