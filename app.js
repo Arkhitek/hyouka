@@ -2891,17 +2891,17 @@
         if(isDragModeEnabled && window._selectedEnvelopePoint === pt.pointIndex){
           plotDiv.style.cursor = 'grab';
           if(dragLayerEl) dragLayerEl.style.cursor = 'grab';
-          if(svgContainerEl) svgContainerEl.style.cursor = 'grab';
+          if(svgContainerEl) svgLayerEl.style.cursor = 'grab';
         } else {
           plotDiv.style.cursor = 'pointer';
           if(dragLayerEl) dragLayerEl.style.cursor = 'pointer';
-          if(svgContainerEl) svgContainerEl.style.cursor = 'pointer';
+          if(svgContainerEl) svgLayerEl.style.cursor = 'pointer';
         }
       } else {
         // 他トレース上はデフォルトカーソル
         plotDiv.style.cursor = 'default';
         if(dragLayerEl) dragLayerEl.style.cursor = '';
-        if(svgContainerEl) svgContainerEl.style.cursor = '';
+        if(svgContainerEl) svgLayerEl.style.cursor = '';
       }
     });
 
@@ -2912,7 +2912,7 @@
         const dragLayerEl = plotDiv.querySelector('.draglayer');
         const svgContainerEl = plotDiv.querySelector('.svg-container');
         if(dragLayerEl) dragLayerEl.style.cursor = '';
-        if(svgContainerEl) svgContainerEl.style.cursor = '';
+        if(svgContainerEl) svgLayerEl.style.cursor = '';
       }
     });
     
