@@ -431,6 +431,7 @@
   }
   
   // キャンセルボタンのハンドラは openPointEditDialog 内で動的に設定されるため、ここでは不要
+  
   // 削除ボタン
   const deletePointEditButton = document.getElementById('deletePointEdit');
   if(deletePointEditButton){
@@ -2319,7 +2320,6 @@
     
     // 包絡線データを編集可能にするための状態管理
     let editableEnvelope = envelope.map(pt => ({...pt}));    // Original raw data (all points) - showing positive and negative loads
-    let traces = [];
     const trace_rawdata = {
       x: rawData.map(pt => pt.gamma), // rad
       y: rawData.map(pt => pt.Load), // Keep original sign
@@ -2349,7 +2349,7 @@
       marker: {
         color: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 'red' : 'blue'),
         size: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 14 : 10),
-        symbol: 'circle',
+        symbol: 'circle', 
         line: {color: 'white', width: 2}
       },
       hovertemplate: '<b>変形角:</b> %{x:.6f}<br><b>荷重:</b> %{y:.3f}<br><i>クリックで編集、Delキーで削除</i><extra></extra>'
@@ -2394,35 +2394,17 @@
       x: [lineVI.gamma_start * envelopeSign, lineVI.gamma_end * envelopeSign],
       y: [lineVI.Load * envelopeSign, lineVI.Load * envelopeSign],
       mode: 'lines',
-      name: 'Line VI (Pu)',
-      line: {color: 'purple', width: 2, dash: 'dash'}
+        if (typeof p0_d !== 'undefined' && typeof gamma_specific !== 'undefined') {
+          const trace_p0d = {
+            x: [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma))) * envelopeSign],
+            y: [p0_d * envelopeSign, p0_d * envelopeSign],
+            mode: 'lines',
+            name: `特定変形時耐力 γ=1/${(1/gamma_specific).toFixed(0)}rad`,
+            line: {color: 'magenta', width: 2, dash: 'dot'}
+          };
+          // 既存 traces 配列に追加（trace_p0d を追加する箇所で traces.push(trace_p0d) してください）
+          traces.push(trace_p0d);
     };
-
-
-
-    traces.push(trace_rawdata);
-    traces.push(trace_env);
-    traces.push(trace_env_points);
-    traces.push(trace_lineI);
-    traces.push(trace_lineII);
-    traces.push(trace_lineIII);
-    traces.push(trace_lineIV);
-    traces.push(trace_py);
-    traces.push(trace_lineV);
-    traces.push(trace_lineVI);
-    traces.push(trace_p0_lines);
-
-    // (d) 特定変形時耐力 γ=1/○○rad のP値を示す水平線
-    if (p0_d != null && results.gamma_specific != null) {
-      const trace_p0d = {
-        x: [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma))) * envelopeSign],
-        y: [p0_d * envelopeSign, p0_d * envelopeSign],
-        mode: 'lines',
-        name: `特定変形時耐力 γ=1/${(1/results.gamma_specific).toFixed(0)}rad`,
-        line: {color: 'magenta', width: 2, dash: 'dot'}
-      };
-      traces.push(trace_p0d);
-    }
 
     // P0 criteria lines
   let gamma_max = Math.max(...envelope.map(pt => Math.abs(pt.gamma)));
@@ -2651,7 +2633,20 @@
     ]
   };
 
-  Plotly.newPlot(plotDiv, traces, layout, plotConfig)
+  Plotly.newPlot(plotDiv, [
+      trace_rawdata,
+      trace_env,
+      trace_env_points,
+      trace_lineI,
+  trace_lineII,
+  trace_lineIII,
+  trace_lineIV,
+      trace_py,
+      trace_lineV,
+      trace_lineVI,
+      trace_pmax,
+      trace_p0_lines
+    ], layout, plotConfig)
     .then(function(){
       // 包絡線点の編集機能を実装
       setupEnvelopeEditing(editableEnvelope);
@@ -2893,17 +2888,17 @@
         if(isDragModeEnabled && window._selectedEnvelopePoint === pt.pointIndex){
           plotDiv.style.cursor = 'grab';
           if(dragLayerEl) dragLayerEl.style.cursor = 'grab';
-          if(svgContainerEl) svgLayerEl.style.cursor = 'grab';
+          if(svgContainerEl) svgContainerEl.style.cursor = 'grab';
         } else {
           plotDiv.style.cursor = 'pointer';
           if(dragLayerEl) dragLayerEl.style.cursor = 'pointer';
-          if(svgContainerEl) svgLayerEl.style.cursor = 'pointer';
+          if(svgContainerEl) svgContainerEl.style.cursor = 'pointer';
         }
       } else {
         // 他トレース上はデフォルトカーソル
         plotDiv.style.cursor = 'default';
         if(dragLayerEl) dragLayerEl.style.cursor = '';
-        if(svgContainerEl) svgLayerEl.style.cursor = '';
+        if(svgContainerEl) svgContainerEl.style.cursor = '';
       }
     });
 
@@ -2914,7 +2909,7 @@
         const dragLayerEl = plotDiv.querySelector('.draglayer');
         const svgContainerEl = plotDiv.querySelector('.svg-container');
         if(dragLayerEl) dragLayerEl.style.cursor = '';
-        if(svgContainerEl) svgLayerEl.style.cursor = '';
+        if(svgContainerEl) svgContainerEl.style.cursor = '';
       }
     });
     
@@ -3160,10 +3155,10 @@
       const p1 = editableEnvelope[i];
       const p2 = editableEnvelope[i + 1];
       
-      const x1 = xaxis.l2p(p1.gamma);
-      const y1 = yaxis.l2p(p1.Load);
-      const x2 = xaxis.l2p(p2.gamma);
-      const y2 = yaxis.l2p(p2.Load);
+  const x1 = xaxis.l2p(p1.gamma);
+  const y1 = yaxis.l2p(p1.Load);
+  const x2 = xaxis.l2p(p2.gamma);
+  const y2 = yaxis.l2p(p2.Load);
       
       // 線分への最短距離を計算
       const dist = pointToSegmentDistance(clickX, clickY, x1, y1, x2, y2);
@@ -3453,6 +3448,7 @@
       const r = analysisResults;
       wsSummary.addRow(['項目','値','単位']);
       wsSummary.addRow(['試験体名称', specimen, '']);
+      const Lval2 = parseFloat(wall_length_m.value);
       const rows = [
         ['最大耐力 Pmax', r.Pmax, 'kN'],
         ['降伏耐力 Py', r.Py, 'kN'],
