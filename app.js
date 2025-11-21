@@ -431,7 +431,6 @@
   }
   
   // キャンセルボタンのハンドラは openPointEditDialog 内で動的に設定されるため、ここでは不要
-  
   // 削除ボタン
   const deletePointEditButton = document.getElementById('deletePointEdit');
   if(deletePointEditButton){
@@ -1793,7 +1792,28 @@
     results.lineII = Py_result.lineII;
     results.lineIII = Py_result.lineIII;
 
-  // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
+    // --- Py範囲チェックと強制補正 ---
+    const Py = results.Py;
+    const Pmax = Pmax_global;
+    if (Py < 0.4 * Pmax || Py > 0.9 * Pmax) {
+      // 0.4Pmaxに最も近い包絡線上の点を探す
+      let bestIdx = -1, bestDiff = Infinity;
+      for (let i = 0; i < envelope.length; i++) {
+        const diff = Math.abs(Math.abs(envelope[i].Load) - 0.4 * Pmax);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIdx = i;
+        }
+      }
+      if (bestIdx >= 0) {
+        results.Py = Math.abs(envelope[bestIdx].Load);
+        results.Py_gamma = envelope[bestIdx].gamma;
+        // δyも同じ点のgammaとする
+        results.delta_y = envelope[bestIdx].gamma;
+      }
+    }
+
+    // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
   const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max);
   Object.assign(results, Pu_result);
 
@@ -2374,7 +2394,7 @@
     }
     const trace_p0_lines = {
       x: [0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign],
-      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, p0_d * envelopeSign, p0_d * envelopeSign],
+      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, 0, p0_d * envelopeSign],
       mode: 'lines',
       name: 'P0基準 (a,b,c,d)',
       line: {color: 'gray', width: 1, dash: 'dot'}
@@ -2769,13 +2789,10 @@
           pushHistory(editableEnvelope);
           appendLog(`範囲選択で ${selectedPointIndices.size} 点を削除しました`);
           selectedPointIndices.clear();
-          selectedPoints = [];
-          selectedPointIndex = -1;
           window._selectedEnvelopePoint = -1;
-          recalculateFromEnvelope(editableEnvelope);
-          // 閉じる: ポップアップの削除ボタンと同様の挙動にする
+          renderPlot(envelopeData, analysisResults);
+          recalculateFromEnvelope(envelopeData);
           closePointEditDialog();
-          return;
         }
         // Box/Lasso selectで複数選択がある場合（従来の処理）
         if(selectedPoints.length > 0){
