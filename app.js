@@ -2394,17 +2394,16 @@
       x: [lineVI.gamma_start * envelopeSign, lineVI.gamma_end * envelopeSign],
       y: [lineVI.Load * envelopeSign, lineVI.Load * envelopeSign],
       mode: 'lines',
-      name: 'Line VI (Pu)',
-      line: {color: 'purple', width: 2, dash: 'dash'}
-    };
-
-    // Pmax
-    const trace_pmax = {
-      x: [results.Pmax_gamma * envelopeSign],
-      y: [Pmax * envelopeSign],
-      mode: 'markers',
-      name: 'Pmax',
-      marker: {color: 'red', size: 12, symbol: 'star'}
+        if (typeof p0_d !== 'undefined' && typeof gamma_specific !== 'undefined') {
+          const trace_p0d = {
+            x: [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma))) * envelopeSign],
+            y: [p0_d * envelopeSign, p0_d * envelopeSign],
+            mode: 'lines',
+            name: `特定変形時耐力 γ=1/${(1/gamma_specific).toFixed(0)}rad`,
+            line: {color: 'magenta', width: 2, dash: 'dot'}
+          };
+          // 既存 traces 配列に追加（trace_p0d を追加する箇所で traces.push(trace_p0d) してください）
+          traces.push(trace_p0d);
     };
 
     // P0 criteria lines
