@@ -2022,73 +2022,107 @@
 
   // === Pu and μ Calculation (Energy Equivalent - Section IV) ===
   function calculatePu_EnergyEquivalent(envelope, Py, Pmax, delta_u_max, fixed_delta_u){
-    // δy は包絡線とLineIV(Py水平線)の交点の変形角
-    // 包絡線上で |Load| が Py に最も近い点、または線形補間でPyを横切る点のγ
+    // Py・δyが0.4Pmaxに強制された場合の判定
     let delta_y = 0;
-    try{
-      // 包絡線を原点から走査し、Pyを跨ぐ区間を線形補間
-      let found = false;
-      for(let i=0; i<envelope.length-1; i++){
-        const p1 = envelope[i];
-        const p2 = envelope[i+1];
-        const L1 = Math.abs(p1.Load);
-        const L2 = Math.abs(p2.Load);
-        // Pyを跨ぐ区間を検出
-        if((L1 <= Py && L2 >= Py) || (L1 >= Py && L2 <= Py)){
-          const denom = (L2 - L1);
-          const ratio = denom !== 0 ? (Py - L1) / denom : 0;
-          const clamped = Math.max(0, Math.min(1, ratio));
-          const g1 = Math.abs(p1.gamma);
-          const g2 = Math.abs(p2.gamma);
-          delta_y = g1 + (g2 - g1) * clamped;
-          found = true;
+    let forced_04Pmax = false;
+    if (Py && Pmax && Math.abs(Py - 0.4 * Pmax) < 1e-6) {
+      // 0.4Pmax強制
+      // 包絡線上のLoad=0.4Pmaxの交点のgammaを探す
+      for (let i = 1; i < envelope.length; i++) {
+        const prev = envelope[i-1], curr = envelope[i];
+        const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
+        if ((prevLoad <= 0.4 * Pmax && currLoad >= 0.4 * Pmax) || (prevLoad >= 0.4 * Pmax && currLoad <= 0.4 * Pmax)) {
+          // 線形補間で交点のgammaを算出
+          const t = (0.4 * Pmax - prevLoad) / (currLoad - prevLoad);
+          delta_y = prev.gamma + t * (curr.gamma - prev.gamma);
+          forced_04Pmax = true;
           break;
         }
       }
-      if(!found){
-        // 見つからない場合は最も近い点を採用（フォールバック）
+      if (!forced_04Pmax) {
+        // 見つからない場合は最も近い点
         let minDiff = Infinity; let bestGamma = 0;
         for(const pt of envelope){
-          const diff = Math.abs(Math.abs(pt.Load) - Py);
+          const diff = Math.abs(Math.abs(pt.Load) - 0.4 * Pmax);
           if(diff < minDiff){ minDiff = diff; bestGamma = Math.abs(pt.gamma); }
         }
         delta_y = bestGamma;
       }
-    }catch(_){
-      // 極端なエラー時は従来ロジック
-      const pt_y = findPointAtLoad(envelope, Py);
-      delta_y = Math.abs(pt_y.gamma);
+    } else {
+      // 通常ロジック
+      try{
+        let found = false;
+        for(let i=0; i<envelope.length-1; i++){
+          const p1 = envelope[i];
+          const p2 = envelope[i+1];
+          const L1 = Math.abs(p1.Load);
+          const L2 = Math.abs(p2.Load);
+          if((L1 <= Py && L2 >= Py) || (L1 >= Py && L2 <= Py)){
+            const denom = (L2 - L1);
+            const ratio = denom !== 0 ? (Py - L1) / denom : 0;
+            const clamped = Math.max(0, Math.min(1, ratio));
+            const g1 = Math.abs(p1.gamma);
+            const g2 = Math.abs(p2.gamma);
+            delta_y = g1 + (g2 - g1) * clamped;
+            found = true;
+            break;
+          }
+        }
+        if(!found){
+          let minDiff = Infinity; let bestGamma = 0;
+          for(const pt of envelope){
+            const diff = Math.abs(Math.abs(pt.Load) - Py);
+            if(diff < minDiff){ minDiff = diff; bestGamma = Math.abs(pt.gamma); }
+          }
+          delta_y = bestGamma;
+        }
+      }catch(_){
+        const pt_y = findPointAtLoad(envelope, Py);
+        delta_y = Math.abs(pt_y.gamma);
+      }
     }
 
-    // Initial stiffness K
+    // 初期剛性K
     const K = Py / delta_y;
 
-    // Find δu (Section IV.1 Step 9)
+    // δu算出
     let delta_u;
     if(Number.isFinite(fixed_delta_u)){
-      // 既定の（補間済み）δuを固定使用
       delta_u = Math.min(Math.abs(fixed_delta_u), Math.abs(delta_u_max));
     }else{
       const delta_u_candidate1 = findDeltaU_08Pmax(envelope, Pmax);
-      const delta_u_candidate2 = delta_u_max; // rad from user input
+      const delta_u_candidate2 = delta_u_max;
       delta_u = Math.min(delta_u_candidate1, delta_u_candidate2);
     }
 
-    // Calculate area S under envelope up to δu
-  const S = calculateAreaUnderEnvelope(envelope, delta_u);
-  // 終局変位位置での包絡線荷重（参考値: 終局時実荷重）
-  const load_at_delta_u = findLoadAtGamma(envelope, delta_u);
+    // 面積S
+    const S = calculateAreaUnderEnvelope(envelope, delta_u);
+    const load_at_delta_u = findLoadAtGamma(envelope, delta_u);
 
-    // Solve for Pu using energy equivalence (Section IV.1 Step 11-12)
-    // S = Pu * (δu - δv/2), where δv = Pu/K
-    // S = Pu * δu - Pu²/(2K)
-    // Pu²/(2K) - Pu*δu + S = 0
-    // Pu = K*δu - sqrt((K*δu)² - 2*K*S)
+    // 強制時は(0,0)-(delta_y,Py)を第5直線とし、以降のPu,μ,δv,δuを再計算
+    if (forced_04Pmax) {
+      // S = Py * (delta_u - delta_y/2)
+      // S = Py * delta_u - Py * delta_y / 2
+      // Py * delta_y / 2 - Py * delta_u + S = 0
+      // Py * (delta_y/2 - delta_u) + S = 0
+      // delta_u = delta_y/2 + S/Py
+      // Pu = Py
+      // delta_v = delta_y
+      // mu = delta_u / delta_y
+      delta_u = delta_y/2 + S/Py;
+      const Pu = Py;
+      const delta_v = delta_y;
+      const mu = delta_u / delta_y;
+      const lineV = {start: {gamma:0, Load:0}, end: {gamma: delta_y, Load: Py}};
+      const lineVI = {gamma_start: delta_y, gamma_end: delta_u, Load: Py};
+      return { delta_y, K, delta_u, S, Pu, delta_v, mu, lineV, lineVI, load_at_delta_u };
+    }
+
+    // 通常時
     const discriminant = Math.pow(K * delta_u, 2) - 2 * K * S;
     if(discriminant < 0){
       console.warn('Pu計算で判別式が負: discriminant =', discriminant);
       appendLog('警告: Pu計算 判別式<0 のためPyにフォールバック (discriminant='+discriminant.toFixed(6)+')');
-      // Fallback: use Py
       return {
         delta_y, K, delta_u, S,
         Pu: Py,
@@ -2103,7 +2137,6 @@
     const delta_v = Pu / K;
     const mu = delta_u / delta_v;
 
-    // Lines for visualization
     const lineV = {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
     const lineVI = {gamma_start: delta_v, gamma_end: delta_u, Load: Pu};
 
