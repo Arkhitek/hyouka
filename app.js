@@ -1877,7 +1877,8 @@
             results.Py = 0.4 * pmax;
             results.Py_gamma = gamma_04pmax;
             results.delta_y = gamma_04pmax;
-            // 必要なら他の関連値も更新
+            // 強制補正フラグを追加
+            results._forcePyOverride = true;
           }
         }
       }
@@ -2025,39 +2026,46 @@
     // δy は包絡線とLineIV(Py水平線)の交点の変形角
     // 包絡線上で |Load| が Py に最も近い点、または線形補間でPyを横切る点のγ
     let delta_y = 0;
-    try{
-      // 包絡線を原点から走査し、Pyを跨ぐ区間を線形補間
-      let found = false;
-      for(let i=0; i<envelope.length-1; i++){
-        const p1 = envelope[i];
-        const p2 = envelope[i+1];
-        const L1 = Math.abs(p1.Load);
-        const L2 = Math.abs(p2.Load);
-        // Pyを跨ぐ区間を検出
-        if((L1 <= Py && L2 >= Py) || (L1 >= Py && L2 <= Py)){
-          const denom = (L2 - L1);
-          const ratio = denom !== 0 ? (Py - L1) / denom : 0;
-          const clamped = Math.max(0, Math.min(1, ratio));
-          const g1 = Math.abs(p1.gamma);
-          const g2 = Math.abs(p2.gamma);
-          delta_y = g1 + (g2 - g1) * clamped;
-          found = true;
-          break;
+    let forceOverride = false;
+    if(typeof results !== 'undefined' && results._forcePyOverride){
+      // 強制補正時は値をそのまま使う
+      delta_y = results.delta_y;
+      forceOverride = true;
+    }else{
+      try{
+        // 包絡線を原点から走査し、Pyを跨ぐ区間を線形補間
+        let found = false;
+        for(let i=0; i<envelope.length-1; i++){
+          const p1 = envelope[i];
+          const p2 = envelope[i+1];
+          const L1 = Math.abs(p1.Load);
+          const L2 = Math.abs(p2.Load);
+          // Pyを跨ぐ区間を検出
+          if((L1 <= Py && L2 >= Py) || (L1 >= Py && L2 <= Py)){
+            const denom = (L2 - L1);
+            const ratio = denom !== 0 ? (Py - L1) / denom : 0;
+            const clamped = Math.max(0, Math.min(1, ratio));
+            const g1 = Math.abs(p1.gamma);
+            const g2 = Math.abs(p2.gamma);
+            delta_y = g1 + (g2 - g1) * clamped;
+            found = true;
+            break;
+          }
         }
-      }
-      if(!found){
-        // 見つからない場合は最も近い点を採用（フォールバック）
-        let minDiff = Infinity; let bestGamma = 0;
-        for(const pt of envelope){
-          const diff = Math.abs(Math.abs(pt.Load) - Py);
-          if(diff < minDiff){ minDiff = diff; bestGamma = Math.abs(pt.gamma); }
+        if(!found){
+          // 見つからない場合は最も近い点を採用（フォールバック）
+          let minDiff = Infinity; let bestGamma = 0;
+          for(const pt of envelope){
+            const diff = Math.abs(Math.abs(pt.Load) - Py);
+            if(diff < minDiff){ minDiff = diff; bestGamma = Math.abs(pt.gamma); }
+          }
+          delta_y = bestGamma;
         }
-        delta_y = bestGamma;
+      }catch(_){
+        // 極端なエラー時は従来ロジック
+        const pt_y = findPointAtLoad(envelope, Py);
+        delta_y = Math.abs(pt_y.gamma);
       }
-    }catch(_){
-      // 極端なエラー時は従来ロジック
-      const pt_y = findPointAtLoad(envelope, Py);
-      delta_y = Math.abs(pt_y.gamma);
     }
 
     // Initial stiffness K
@@ -2075,9 +2083,9 @@
     }
 
     // Calculate area S under envelope up to δu
-  const S = calculateAreaUnderEnvelope(envelope, delta_u);
-  // 終局変位位置での包絡線荷重（参考値: 終局時実荷重）
-  const load_at_delta_u = findLoadAtGamma(envelope, delta_u);
+    const S = calculateAreaUnderEnvelope(envelope, delta_u);
+    // 終局変位位置での包絡線荷重（参考値: 終局時実荷重）
+    const load_at_delta_u = findLoadAtGamma(envelope, delta_u);
 
     // Solve for Pu using energy equivalence (Section IV.1 Step 11-12)
     // S = Pu * (δu - δv/2), where δv = Pu/K
@@ -2104,7 +2112,10 @@
     const mu = delta_u / delta_v;
 
     // Lines for visualization
-    const lineV = {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
+    // 強制補正時は第Ⅴ直線を原点～(δy,Py)で固定
+    const lineV = forceOverride
+      ? {start: {gamma:0, Load:0}, end: {gamma: delta_y, Load: Py}}
+      : {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
     const lineVI = {gamma_start: delta_v, gamma_end: delta_u, Load: Pu};
 
     return { delta_y, K, delta_u, S, Pu, delta_v, mu, lineV, lineVI, load_at_delta_u };
