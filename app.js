@@ -1446,8 +1446,8 @@
       if(thinningRateValue === 0){
         return envelope.map(pt=>({...pt}));
 
-      }
-      
+ }
+
       const pts = envelope.map(pt => ({x: pt.gamma, y: pt.Load}));
       
       // 弧長(累積距離)を計算
@@ -1861,28 +1861,28 @@
       const py = results.Py;
       if (isFinite(pmax) && isFinite(py)) {
         if (py < 0.4 * pmax || py > 0.9 * pmax) {
-          // 0.4Pmaxの包絡線上の点を探す
-          let targetPt = null;
+          // 0.4Pmaxの包絡線上の点（Load=0.4Pmaxの交点）を探す
+          let gamma_04pmax = null;
           for (let i = 1; i < envelope.length; i++) {
             const prev = envelope[i-1], curr = envelope[i];
             const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
             if ((prevLoad <= 0.4 * pmax && currLoad >= 0.4 * pmax) || (prevLoad >= 0.4 * pmax && currLoad <= 0.4 * pmax)) {
-              // 線形補間
+              // 線形補間で交点のgammaを算出
               const t = (0.4 * pmax - prevLoad) / (currLoad - prevLoad);
-              const gamma = prev.gamma + t * (curr.gamma - prev.gamma);
-              targetPt = { Py: 0.4 * pmax, Py_gamma: gamma };
+              gamma_04pmax = prev.gamma + t * (curr.gamma - prev.gamma);
               break;
             }
           }
-          if (targetPt) {
-            results.Py = targetPt.Py;
-            results.Py_gamma = targetPt.Py_gamma;
+          if (gamma_04pmax !== null) {
+            results.Py = 0.4 * pmax;
+            results.Py_gamma = gamma_04pmax;
+            results.delta_y = gamma_04pmax;
             // 必要なら他の関連値も更新
           }
         }
       }
     } catch(e) {
-      console.warn('Py強制補正エラー:', e);
+      console.warn('Py/δy強制補正エラー:', e);
     }
 
     // Calculate P0 (Section V.1) using final results
@@ -2405,7 +2405,7 @@
     }
     const trace_p0_lines = {
       x: [0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign],
-      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, p0_d * envelopeSign, p0_d * envelopeSign],
+      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, 0, p0_d * envelopeSign],
       mode: 'lines',
       name: 'P0基準 (a,b,c,d)',
       line: {color: 'gray', width: 1, dash: 'dot'}
@@ -2643,7 +2643,7 @@
       
       // ドラッグモードがONの場合、カーソルを手の形に設定
       // カーソルは hover イベントで制御する（選択点にホバーしたときのみ手の形にする）
-      
+// 
       // Autoscale（モードバーやダブルクリック）が発火した場合も包絡線範囲へ調整
       if(!relayoutHandlerAttached){
         plotDiv.on('plotly_relayout', function(e){
