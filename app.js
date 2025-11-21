@@ -2636,20 +2636,7 @@
     ]
   };
 
-  Plotly.newPlot(plotDiv, [
-      trace_rawdata,
-      trace_env,
-      trace_env_points,
-      trace_lineI,
-  trace_lineII,
-  trace_lineIII,
-  trace_lineIV,
-      trace_py,
-      trace_lineV,
-      trace_lineVI,
-      trace_pmax,
-      trace_p0_lines
-    ], layout, plotConfig)
+  Plotly.newPlot(plotDiv, traces, layout, plotConfig)
     .then(function(){
       // 包絡線点の編集機能を実装
       setupEnvelopeEditing(editableEnvelope);
