@@ -1794,9 +1794,45 @@
     results.lineII = Py_result.lineII;
     results.lineIII = Py_result.lineIII;
 
-  // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
-  const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max, null, null);
-  Object.assign(results, Pu_result);
+    // --- Pyが0.4Pmax～0.9Pmaxの範囲外なら0.4Pmaxの包絡線上の点をPy/δyとする ---
+    // この処理を最初のPu計算の前に実行
+    let forcedPyLineV = null;
+    try {
+      // 暫定Pmaxを使用して判定
+      const pmax = Pmax_global;
+      const py = results.Py;
+      if (isFinite(pmax) && isFinite(py)) {
+        if (py < 0.4 * pmax || py > 0.9 * pmax) {
+          // 0.4Pmaxの包絡線上の点（Load=0.4Pmaxの交点）を探す
+          let gamma_04pmax = null;
+          for (let i = 1; i < envelope.length; i++) {
+            const prev = envelope[i-1], curr = envelope[i];
+            const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
+            if ((prevLoad <= 0.4 * pmax && currLoad >= 0.4 * pmax) || (prevLoad >= 0.4 * pmax && currLoad <= 0.4 * pmax)) {
+              // 線形補間で交点のgammaを算出
+              const t = (0.4 * pmax - prevLoad) / (currLoad - prevLoad);
+              gamma_04pmax = prev.gamma + t * (curr.gamma - prev.gamma);
+              break;
+            }
+          }
+          if (gamma_04pmax !== null) {
+            results.Py = 0.4 * pmax;
+            results.Py_gamma = gamma_04pmax;
+            results.delta_y = gamma_04pmax;
+            // 強制時は原点とこの点を結ぶ直線をlineVとして以降の計算・描画に使用
+            forcedPyLineV = { start: { gamma: 0, Load: 0 }, end: { gamma: gamma_04pmax, Load: 0.4 * pmax } };
+            appendLog('Pyが範囲外のため0.4Pmaxに強制設定しました (Py=' + (0.4*pmax).toFixed(3) + ' kN)');
+          }
+        }
+      }
+    } catch(e) {
+      console.warn('Py/δy強制補正エラー:', e);
+    }
+
+    // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
+    // forcedPyLineVを渡す
+    const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max, null, forcedPyLineV);
+    Object.assign(results, Pu_result);
 
     // Override Pmax with value BEFORE ultimate displacement δu per user requirement
     const delta_u = results.delta_u; // from Pu_result
@@ -1835,9 +1871,38 @@
           results.lineII = Py_pre.lineII;
           results.lineIII = Py_pre.lineIII;
 
+          // 再度Py強制補正をチェック（pre-δu範囲での再計算後）
+          let forcedPyLineV_pass2 = null;
+          try {
+            const pmax_pass2 = pmaxPre;
+            const py_pass2 = results.Py;
+            if (isFinite(pmax_pass2) && isFinite(py_pass2)) {
+              if (py_pass2 < 0.4 * pmax_pass2 || py_pass2 > 0.9 * pmax_pass2) {
+                let gamma_04pmax_pass2 = null;
+                for (let i = 1; i < envPre.length; i++) {
+                  const prev = envPre[i-1], curr = envPre[i];
+                  const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
+                  if ((prevLoad <= 0.4 * pmax_pass2 && currLoad >= 0.4 * pmax_pass2) || (prevLoad >= 0.4 * pmax_pass2 && currLoad <= 0.4 * pmax_pass2)) {
+                    const t = (0.4 * pmax_pass2 - prevLoad) / (currLoad - prevLoad);
+                    gamma_04pmax_pass2 = prev.gamma + t * (curr.gamma - prev.gamma);
+                    break;
+                  }
+                }
+                if (gamma_04pmax_pass2 !== null) {
+                  results.Py = 0.4 * pmax_pass2;
+                  results.Py_gamma = gamma_04pmax_pass2;
+                  results.delta_y = gamma_04pmax_pass2;
+                  forcedPyLineV_pass2 = { start: { gamma: 0, Load: 0 }, end: { gamma: gamma_04pmax_pass2, Load: 0.4 * pmax_pass2 } };
+                }
+              }
+            }
+          } catch(e) {
+            console.warn('Second-pass Py強制補正エラー:', e);
+          }
+
           // Recompute Pu/μ/δv/δu with updated Py
           // 注意: 面積Sを正しくδuまで補間するため、積分対象は元の full envelope を渡す
-          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1, forcedPyLineV);
+          const Pu_pre = calculatePu_EnergyEquivalent(envelope, results.Py, pmaxPre, delta_u_max, du1, forcedPyLineV_pass2 || forcedPyLineV);
           Object.assign(results, Pu_pre);
 
           // Recompute Pmax with final δu restriction
@@ -1853,38 +1918,6 @@
       }
     }catch(e){
       console.warn('Second-pass (pre-δu) Py/Pu 再計算に失敗:', e);
-    }
-
-    // --- Pyが0.4Pmax～0.9Pmaxの範囲外なら0.4Pmaxの包絡線上の点をPy/δyとする ---
-    let forcedPyLineV = null;
-    try {
-      const pmax = results.Pmax;
-      const py = results.Py;
-      if (isFinite(pmax) && isFinite(py)) {
-        if (py < 0.4 * pmax || py > 0.9 * pmax) {
-          // 0.4Pmaxの包絡線上の点（Load=0.4Pmaxの交点）を探す
-          let gamma_04pmax = null;
-          for (let i = 1; i < envelope.length; i++) {
-            const prev = envelope[i-1], curr = envelope[i];
-            const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
-            if ((prevLoad <= 0.4 * pmax && currLoad >= 0.4 * pmax) || (prevLoad >= 0.4 * pmax && currLoad <= 0.4 * pmax)) {
-              // 線形補間で交点のgammaを算出
-              const t = (0.4 * pmax - prevLoad) / (currLoad - prevLoad);
-              gamma_04pmax = prev.gamma + t * (curr.gamma - prev.gamma);
-              break;
-            }
-          }
-          if (gamma_04pmax !== null) {
-            results.Py = 0.4 * pmax;
-            results.Py_gamma = gamma_04pmax;
-            results.delta_y = gamma_04pmax;
-            // 強制時は原点とこの点を結ぶ直線をlineVとして以降の計算・描画に使用
-            forcedPyLineV = { start: { gamma: 0, Load: 0 }, end: { gamma: gamma_04pmax, Load: 0.4 * pmax } };
-          }
-        }
-      }
-    } catch(e) {
-      console.warn('Py/δy強制補正エラー:', e);
     }
 
     // Calculate P0 (Section V.1) using final results
