@@ -1880,7 +1880,6 @@
             results.delta_y = gamma_04pmax;
             // 強制時は原点とこの点を結ぶ直線をlineVとして以降の計算・描画に使用
             forcedPyLineV = { start: { gamma: 0, Load: 0 }, end: { gamma: gamma_04pmax, Load: 0.4 * pmax } };
-            results.forcedPyLineV = forcedPyLineV;
           }
         }
       }
@@ -2108,10 +2107,10 @@
 
     // Lines for visualization
     let lineV, lineVI;
-    // results.forcedPyLineVがあればそれを優先
-    if (results && results.forcedPyLineV) {
-      lineV = results.forcedPyLineV;
-      lineVI = { gamma_start: results.forcedPyLineV.end.gamma, gamma_end: delta_u, Load: results.forcedPyLineV.end.Load };
+    // Py強制時は原点～Py/δyの直線を使用
+    if (typeof forcedPyLineV !== 'undefined' && forcedPyLineV) {
+      lineV = forcedPyLineV;
+      lineVI = { gamma_start: forcedPyLineV.end.gamma, gamma_end: delta_u, Load: forcedPyLineV.end.Load };
     } else {
       lineV = { start: { gamma: 0, Load: 0 }, end: { gamma: delta_v, Load: Pu } };
       lineVI = { gamma_start: delta_v, gamma_end: delta_u, Load: Pu };
@@ -2381,13 +2380,26 @@
     };
 
     // Perfect elasto-plastic model (Line V, VI)
-    const trace_lineV = {
-      x: [0, lineV.end.gamma * envelopeSign],
-      y: [0, lineV.end.Load * envelopeSign],
-      mode: 'lines',
-      name: 'Line V (初期剛性)',
-      line: {color: 'purple', width: 2, dash: 'dash'}
-    };
+    // Py強制時は原点～強制Py/δyの直線を必ず描画
+    let trace_lineV;
+    if (lineV && lineV.start && lineV.end) {
+      trace_lineV = {
+        x: [lineV.start.gamma * envelopeSign, lineV.end.gamma * envelopeSign],
+        y: [lineV.start.Load * envelopeSign, lineV.end.Load * envelopeSign],
+        mode: 'lines',
+        name: 'Line V (初期剛性)',
+        line: {color: 'purple', width: 2, dash: 'dash'}
+      };
+    } else {
+      // フォールバック（従来ロジック）
+      trace_lineV = {
+        x: [0, 0],
+        y: [0, 0],
+        mode: 'lines',
+        name: 'Line V (初期剛性)',
+        line: {color: 'purple', width: 2, dash: 'dash'}
+      };
+    }
 
     const trace_lineVI = {
       x: [lineVI.gamma_start * envelopeSign, lineVI.gamma_end * envelopeSign],
