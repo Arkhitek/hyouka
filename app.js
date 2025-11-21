@@ -431,6 +431,7 @@
   }
   
   // キャンセルボタンのハンドラは openPointEditDialog 内で動的に設定されるため、ここでは不要
+  
   // 削除ボタン
   const deletePointEditButton = document.getElementById('deletePointEdit');
   if(deletePointEditButton){
@@ -1444,6 +1445,7 @@
       // 間引き率0の場合は間引き無し
       if(thinningRateValue === 0){
         return envelope.map(pt=>({...pt}));
+
       }
       
       const pts = envelope.map(pt => ({x: pt.gamma, y: pt.Load}));
@@ -1792,28 +1794,7 @@
     results.lineII = Py_result.lineII;
     results.lineIII = Py_result.lineIII;
 
-    // --- Py範囲チェックと強制補正 ---
-    const Py = results.Py;
-    const Pmax = Pmax_global;
-    if (Py < 0.4 * Pmax || Py > 0.9 * Pmax) {
-      // 0.4Pmaxに最も近い包絡線上の点を探す
-      let bestIdx = -1, bestDiff = Infinity;
-      for (let i = 0; i < envelope.length; i++) {
-        const diff = Math.abs(Math.abs(envelope[i].Load) - 0.4 * Pmax);
-        if (diff < bestDiff) {
-          bestDiff = diff;
-          bestIdx = i;
-        }
-      }
-      if (bestIdx >= 0) {
-        results.Py = Math.abs(envelope[bestIdx].Load);
-        results.Py_gamma = envelope[bestIdx].gamma;
-        // δyも同じ点のgammaとする
-        results.delta_y = envelope[bestIdx].gamma;
-      }
-    }
-
-    // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
+  // Calculate Pu and μ using Perfect Elasto-Plastic Model (Section IV)
   const Pu_result = calculatePu_EnergyEquivalent(envelope, results.Py, Pmax_global, delta_u_max);
   Object.assign(results, Pu_result);
 
@@ -1872,6 +1853,36 @@
       }
     }catch(e){
       console.warn('Second-pass (pre-δu) Py/Pu 再計算に失敗:', e);
+    }
+
+    // --- Pyが0.4Pmax～0.9Pmaxの範囲外なら0.4Pmaxの包絡線上の点をPy/δyとする ---
+    try {
+      const pmax = results.Pmax;
+      const py = results.Py;
+      if (isFinite(pmax) && isFinite(py)) {
+        if (py < 0.4 * pmax || py > 0.9 * pmax) {
+          // 0.4Pmaxの包絡線上の点を探す
+          let targetPt = null;
+          for (let i = 1; i < envelope.length; i++) {
+            const prev = envelope[i-1], curr = envelope[i];
+            const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
+            if ((prevLoad <= 0.4 * pmax && currLoad >= 0.4 * pmax) || (prevLoad >= 0.4 * pmax && currLoad <= 0.4 * pmax)) {
+              // 線形補間
+              const t = (0.4 * pmax - prevLoad) / (currLoad - prevLoad);
+              const gamma = prev.gamma + t * (curr.gamma - prev.gamma);
+              targetPt = { Py: 0.4 * pmax, Py_gamma: gamma };
+              break;
+            }
+          }
+          if (targetPt) {
+            results.Py = targetPt.Py;
+            results.Py_gamma = targetPt.Py_gamma;
+            // 必要なら他の関連値も更新
+          }
+        }
+      }
+    } catch(e) {
+      console.warn('Py強制補正エラー:', e);
     }
 
     // Calculate P0 (Section V.1) using final results
@@ -2394,7 +2405,7 @@
     }
     const trace_p0_lines = {
       x: [0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign],
-      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, 0, p0_d * envelopeSign],
+      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, p0_d * envelopeSign, p0_d * envelopeSign],
       mode: 'lines',
       name: 'P0基準 (a,b,c,d)',
       line: {color: 'gray', width: 1, dash: 'dot'}
