@@ -2140,10 +2140,14 @@
 
     // Lines for visualization
     let lineV, lineVI;
-    // Py強制時は原点～Py/δyの直線を使用
+    // Py強制時も、強制直線の傾きを初期剛性 K として使用してPu/δvを計算している。
+    // 描画上は計算結果の終局点(Pu, δv)を使ってLineV/VIを描く（＝原点の傾きはforcedPyLineVに一致）
     if (forcedPyLineV) {
-      lineV = forcedPyLineV;
-      lineVI = { gamma_start: forcedPyLineV.end.gamma, gamma_end: delta_u, Load: forcedPyLineV.end.Load };
+      // forcedPyLineV は {start:{gamma:0,Load:0}, end:{gamma:delta_y, Load:Py}} の形
+      // 傾きは既に K = Py / delta_y として計算済みなので、描画は計算済みの delta_v, Pu を用いる。
+      lineV = { start: { gamma: 0, Load: 0 }, end: { gamma: delta_v, Load: Pu } };
+      lineVI = { gamma_start: delta_v, gamma_end: delta_u, Load: Pu };
+      // ただし、表示上ユーザーに強制された原点→Py点も見せたい場合は、別トレースで描画する扱いにする必要がある。
     } else {
       lineV = { start: { gamma: 0, Load: 0 }, end: { gamma: delta_v, Load: Pu } };
       lineVI = { gamma_start: delta_v, gamma_end: delta_u, Load: Pu };
