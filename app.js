@@ -1446,8 +1446,8 @@
       if(thinningRateValue === 0){
         return envelope.map(pt=>({...pt}));
 
- }
-
+      }
+      
       const pts = envelope.map(pt => ({x: pt.gamma, y: pt.Load}));
       
       // 弧長(累積距離)を計算
@@ -1861,29 +1861,28 @@
       const py = results.Py;
       if (isFinite(pmax) && isFinite(py)) {
         if (py < 0.4 * pmax || py > 0.9 * pmax) {
-          // 0.4Pmaxの包絡線上の点（Load=0.4Pmaxの交点）を探す
-          let gamma_04pmax = null;
+          // 0.4Pmaxの包絡線上の点を探す
+          let targetPt = null;
           for (let i = 1; i < envelope.length; i++) {
             const prev = envelope[i-1], curr = envelope[i];
             const prevLoad = Math.abs(prev.Load), currLoad = Math.abs(curr.Load);
             if ((prevLoad <= 0.4 * pmax && currLoad >= 0.4 * pmax) || (prevLoad >= 0.4 * pmax && currLoad <= 0.4 * pmax)) {
-              // 線形補間で交点のgammaを算出
+              // 線形補間
               const t = (0.4 * pmax - prevLoad) / (currLoad - prevLoad);
-              gamma_04pmax = prev.gamma + t * (curr.gamma - prev.gamma);
+              const gamma = prev.gamma + t * (curr.gamma - prev.gamma);
+              targetPt = { Py: 0.4 * pmax, Py_gamma: gamma };
               break;
             }
           }
-          if (gamma_04pmax !== null) {
-            results.Py = 0.4 * pmax;
-            results.Py_gamma = gamma_04pmax;
-            results.delta_y = gamma_04pmax;
-            // 強制補正フラグを追加
-            results._forcePyOverride = true;
+          if (targetPt) {
+            results.Py = targetPt.Py;
+            results.Py_gamma = targetPt.Py_gamma;
+            // 必要なら他の関連値も更新
           }
         }
       }
     } catch(e) {
-      console.warn('Py/δy強制補正エラー:', e);
+      console.warn('Py強制補正エラー:', e);
     }
 
     // Calculate P0 (Section V.1) using final results
@@ -2026,46 +2025,39 @@
     // δy は包絡線とLineIV(Py水平線)の交点の変形角
     // 包絡線上で |Load| が Py に最も近い点、または線形補間でPyを横切る点のγ
     let delta_y = 0;
-    let forceOverride = false;
-    if(typeof results !== 'undefined' && results._forcePyOverride){
-      // 強制補正時は値をそのまま使う
-      delta_y = results.delta_y;
-      forceOverride = true;
-    }else{
-      try{
-        // 包絡線を原点から走査し、Pyを跨ぐ区間を線形補間
-        let found = false;
-        for(let i=0; i<envelope.length-1; i++){
-          const p1 = envelope[i];
-          const p2 = envelope[i+1];
-          const L1 = Math.abs(p1.Load);
-          const L2 = Math.abs(p2.Load);
-          // Pyを跨ぐ区間を検出
-          if((L1 <= Py && L2 >= Py) || (L1 >= Py && L2 <= Py)){
-            const denom = (L2 - L1);
-            const ratio = denom !== 0 ? (Py - L1) / denom : 0;
-            const clamped = Math.max(0, Math.min(1, ratio));
-            const g1 = Math.abs(p1.gamma);
-            const g2 = Math.abs(p2.gamma);
-            delta_y = g1 + (g2 - g1) * clamped;
-            found = true;
-            break;
-          }
+    try{
+      // 包絡線を原点から走査し、Pyを跨ぐ区間を線形補間
+      let found = false;
+      for(let i=0; i<envelope.length-1; i++){
+        const p1 = envelope[i];
+        const p2 = envelope[i+1];
+        const L1 = Math.abs(p1.Load);
+        const L2 = Math.abs(p2.Load);
+        // Pyを跨ぐ区間を検出
+        if((L1 <= Py && L2 >= Py) || (L1 >= Py && L2 <= Py)){
+          const denom = (L2 - L1);
+          const ratio = denom !== 0 ? (Py - L1) / denom : 0;
+          const clamped = Math.max(0, Math.min(1, ratio));
+          const g1 = Math.abs(p1.gamma);
+          const g2 = Math.abs(p2.gamma);
+          delta_y = g1 + (g2 - g1) * clamped;
+          found = true;
+          break;
         }
-        if(!found){
-          // 見つからない場合は最も近い点を採用（フォールバック）
-          let minDiff = Infinity; let bestGamma = 0;
-          for(const pt of envelope){
-            const diff = Math.abs(Math.abs(pt.Load) - Py);
-            if(diff < minDiff){ minDiff = diff; bestGamma = Math.abs(pt.gamma); }
-          }
-          delta_y = bestGamma;
-        }
-      }catch(_){
-        // 極端なエラー時は従来ロジック
-        const pt_y = findPointAtLoad(envelope, Py);
-        delta_y = Math.abs(pt_y.gamma);
       }
+      if(!found){
+        // 見つからない場合は最も近い点を採用（フォールバック）
+        let minDiff = Infinity; let bestGamma = 0;
+        for(const pt of envelope){
+          const diff = Math.abs(Math.abs(pt.Load) - Py);
+          if(diff < minDiff){ minDiff = diff; bestGamma = Math.abs(pt.gamma); }
+        }
+        delta_y = bestGamma;
+      }
+    }catch(_){
+      // 極端なエラー時は従来ロジック
+      const pt_y = findPointAtLoad(envelope, Py);
+      delta_y = Math.abs(pt_y.gamma);
     }
 
     // Initial stiffness K
@@ -2083,9 +2075,9 @@
     }
 
     // Calculate area S under envelope up to δu
-    const S = calculateAreaUnderEnvelope(envelope, delta_u);
-    // 終局変位位置での包絡線荷重（参考値: 終局時実荷重）
-    const load_at_delta_u = findLoadAtGamma(envelope, delta_u);
+  const S = calculateAreaUnderEnvelope(envelope, delta_u);
+  // 終局変位位置での包絡線荷重（参考値: 終局時実荷重）
+  const load_at_delta_u = findLoadAtGamma(envelope, delta_u);
 
     // Solve for Pu using energy equivalence (Section IV.1 Step 11-12)
     // S = Pu * (δu - δv/2), where δv = Pu/K
@@ -2112,10 +2104,7 @@
     const mu = delta_u / delta_v;
 
     // Lines for visualization
-    // 強制補正時は第Ⅴ直線を原点～(δy,Py)で固定
-    const lineV = forceOverride
-      ? {start: {gamma:0, Load:0}, end: {gamma: delta_y, Load: Py}}
-      : {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
+    const lineV = {start: {gamma:0, Load:0}, end: {gamma: delta_v, Load: Pu}};
     const lineVI = {gamma_start: delta_v, gamma_end: delta_u, Load: Pu};
 
     return { delta_y, K, delta_u, S, Pu, delta_v, mu, lineV, lineVI, load_at_delta_u };
@@ -2394,16 +2383,17 @@
       x: [lineVI.gamma_start * envelopeSign, lineVI.gamma_end * envelopeSign],
       y: [lineVI.Load * envelopeSign, lineVI.Load * envelopeSign],
       mode: 'lines',
-        if (typeof p0_d !== 'undefined' && typeof gamma_specific !== 'undefined') {
-          const trace_p0d = {
-            x: [0, Math.max(...envelope.map(pt => Math.abs(pt.gamma))) * envelopeSign],
-            y: [p0_d * envelopeSign, p0_d * envelopeSign],
-            mode: 'lines',
-            name: `特定変形時耐力 γ=1/${(1/gamma_specific).toFixed(0)}rad`,
-            line: {color: 'magenta', width: 2, dash: 'dot'}
-          };
-          // 既存 traces 配列に追加（trace_p0d を追加する箇所で traces.push(trace_p0d) してください）
-          traces.push(trace_p0d);
+      name: 'Line VI (Pu)',
+      line: {color: 'purple', width: 2, dash: 'dash'}
+    };
+
+    // Pmax
+    const trace_pmax = {
+      x: [results.Pmax_gamma * envelopeSign],
+      y: [Pmax * envelopeSign],
+      mode: 'markers',
+      name: 'Pmax',
+      marker: {color: 'red', size: 12, symbol: 'star'}
     };
 
     // P0 criteria lines
@@ -2415,7 +2405,7 @@
     }
     const trace_p0_lines = {
       x: [0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign],
-      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, 0, p0_d * envelopeSign],
+      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, p0_d * envelopeSign, p0_d * envelopeSign],
       mode: 'lines',
       name: 'P0基準 (a,b,c,d)',
       line: {color: 'gray', width: 1, dash: 'dot'}
@@ -2653,7 +2643,7 @@
       
       // ドラッグモードがONの場合、カーソルを手の形に設定
       // カーソルは hover イベントで制御する（選択点にホバーしたときのみ手の形にする）
-// 
+      
       // Autoscale（モードバーやダブルクリック）が発火した場合も包絡線範囲へ調整
       if(!relayoutHandlerAttached){
         plotDiv.on('plotly_relayout', function(e){
