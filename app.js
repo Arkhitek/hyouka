@@ -2449,9 +2449,20 @@
       gamma_max = Math.max(Math.abs(xRangeSafe[0]), Math.abs(xRangeSafe[1]));
       if(!Number.isFinite(gamma_max) || gamma_max <= 0) gamma_max = 1;
     }
+    // P0基準: a,b,c は各々原点からの水平線、d は特定変形時の水平線（X軸と平行）として表示
     const trace_p0_lines = {
-      x: [0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign, NaN, 0, gamma_max * envelopeSign],
-      y: [p0_a * envelopeSign, p0_a * envelopeSign, NaN, p0_b * envelopeSign, p0_b * envelopeSign, NaN, p0_c * envelopeSign, p0_c * envelopeSign, NaN, 0, p0_d * envelopeSign],
+      x: [
+        0, gamma_max * envelopeSign, NaN,
+        0, gamma_max * envelopeSign, NaN,
+        0, gamma_max * envelopeSign, NaN,
+        0, gamma_max * envelopeSign
+      ],
+      y: [
+        p0_a * envelopeSign, p0_a * envelopeSign, NaN,
+        p0_b * envelopeSign, p0_b * envelopeSign, NaN,
+        p0_c * envelopeSign, p0_c * envelopeSign, NaN,
+        p0_d * envelopeSign, p0_d * envelopeSign
+      ],
       mode: 'lines',
       name: 'P0基準 (a,b,c,d)',
       line: {color: 'gray', width: 1, dash: 'dot'}
