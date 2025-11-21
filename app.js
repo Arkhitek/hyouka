@@ -2319,6 +2319,7 @@
     
     // 包絡線データを編集可能にするための状態管理
     let editableEnvelope = envelope.map(pt => ({...pt}));    // Original raw data (all points) - showing positive and negative loads
+    let traces = [];
     const trace_rawdata = {
       x: rawData.map(pt => pt.gamma), // rad
       y: rawData.map(pt => pt.Load), // Keep original sign
@@ -2348,7 +2349,7 @@
       marker: {
         color: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 'red' : 'blue'),
         size: editableEnvelope.map((pt, idx) => idx === (window._selectedEnvelopePoint || -1) ? 14 : 10),
-        symbol: 'circle', 
+        symbol: 'circle',
         line: {color: 'white', width: 2}
       },
       hovertemplate: '<b>変形角:</b> %{x:.6f}<br><b>荷重:</b> %{y:.3f}<br><i>クリックで編集、Delキーで削除</i><extra></extra>'
@@ -2396,6 +2397,20 @@
       name: 'Line VI (Pu)',
       line: {color: 'purple', width: 2, dash: 'dash'}
     };
+
+
+
+    traces.push(trace_rawdata);
+    traces.push(trace_env);
+    traces.push(trace_env_points);
+    traces.push(trace_lineI);
+    traces.push(trace_lineII);
+    traces.push(trace_lineIII);
+    traces.push(trace_lineIV);
+    traces.push(trace_py);
+    traces.push(trace_lineV);
+    traces.push(trace_lineVI);
+    traces.push(trace_p0_lines);
 
     // (d) 特定変形時耐力 γ=1/○○rad のP値を示す水平線
     if (p0_d != null && results.gamma_specific != null) {
