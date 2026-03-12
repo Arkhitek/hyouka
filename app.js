@@ -108,6 +108,7 @@
 
   // ドラッグモードの状態（グローバル変数）
   let isDragModeEnabled = false;
+  const isSnapEnabled = true; // 包絡線吸着（常時ON）
   let isBoxSelectModeEnabled = false;
   let selectedPointIndices = new Set(); // 範囲選択された点のインデックス
 
@@ -2662,6 +2663,7 @@
   const plotConfig = {
     editable: false,
     displayModeBar: true,
+    scrollZoom: true,
     // Box select / Lasso select を有効化
     displaylogo: false,
     // デフォルトのAutoscale/Resetを削除（全データへのフィットを防止）
@@ -2975,9 +2977,9 @@
       const yaxis = plotDiv._fullLayout.yaxis;
       if(!xaxis || !yaxis) return;
       
-      const bbox = (dragLayer || plotDiv).getBoundingClientRect();
-      const clickX = e.clientX - bbox.left;
-      const clickY = e.clientY - bbox.top;
+      const bbox = plotDiv.getBoundingClientRect();
+      const clickX = e.clientX - bbox.left - xaxis._offset;
+      const clickY = e.clientY - bbox.top - yaxis._offset;
       
       // 選択点のピクセル座標を計算
       const selectedIdx = window._selectedEnvelopePoint;
@@ -3016,9 +3018,9 @@
       const yaxis = plotDiv._fullLayout.yaxis;
       if(!xaxis || !yaxis) return;
       
-      const bbox = (dragLayer || plotDiv).getBoundingClientRect();
-      const moveX = e.clientX - bbox.left;
-      const moveY = e.clientY - bbox.top;
+      const bbox = plotDiv.getBoundingClientRect();
+      const moveX = e.clientX - bbox.left - xaxis._offset;
+      const moveY = e.clientY - bbox.top - yaxis._offset;
       
   // データ座標に変換（pixel → linear）
   const newGamma = xaxis.p2l(moveX);
@@ -3030,15 +3032,16 @@
       let appliedGamma = newGamma;
       let appliedLoad = newLoad;
       let snapped = false;
-      if(window.rawData !== undefined){ /* グローバル rawData 参照 */ }
-      try{
-        const snapCandidate = findNearestRawDataSnap(newGamma, newLoad, xaxis, yaxis, rawData, SNAP_PX_THRESHOLD);
-        if(snapCandidate){
-          appliedGamma = snapCandidate.gamma;
-          appliedLoad = snapCandidate.Load;
-          snapped = true;
-        }
-      }catch(err){ /* 失敗しても通常ドラッグ継続 */ }
+      if(isSnapEnabled){
+        try{
+          const snapCandidate = findNearestRawDataSnap(newGamma, newLoad, xaxis, yaxis, rawData, SNAP_PX_THRESHOLD);
+          if(snapCandidate){
+            appliedGamma = snapCandidate.gamma;
+            appliedLoad = snapCandidate.Load;
+            snapped = true;
+          }
+        }catch(err){ /* 失敗しても通常ドラッグ継続 */ }
+      }
 
       // 包絡線点を更新（スナップ後座標）
       editableEnvelope[shiftDragIndex].gamma = appliedGamma;
