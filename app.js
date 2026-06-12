@@ -1396,8 +1396,12 @@
       analysisResults = calculateJTCCMMetrics(workingEnvelope, gamma_specific, delta_u_max, L, alpha, c0);
 
       // 表示用: 未編集時のみ間引き
+      // 間引き下限(10点)を超える包絡線は常に thinEnvelope を通す。
+      // thinEnvelope 内部で間引き率0や既に目標点数以下の場合はフル包絡線を返すため安全。
+      // （旧コードは ">100" 固定だったため、生成包絡線が100点以下になるデータでは
+      //   間引き率スライダーが全く効かなかった）
       let displayEnvelope = workingEnvelope;
-      if(!useEdited && workingEnvelope.length > 100){
+      if(!useEdited && workingEnvelope.length > 10){
         const mandatoryGammas = [];
         if(Number.isFinite(analysisResults.delta_y)) mandatoryGammas.push(analysisResults.delta_y);
         if(Number.isFinite(analysisResults.delta_u)) mandatoryGammas.push(analysisResults.delta_u);
